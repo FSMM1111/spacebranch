@@ -1043,3 +1043,10 @@ button:focus-visible { outline: 2px solid #555; outline-offset: 3px; }
 .input-attachment > small { display: block; padding: 3px; color: #888; font-size: 10px; }
 .input-file-error { color: #555; font-size: 12px; line-height: 1.5; margin-bottom: 0; }
 @media (max-width: 520px) { .unified-input-card { padding: 18px; } .unified-input-footer { gap: 10px; align-items: end; } .input-add-actions { gap: 6px; } .input-add-actions button { font-size: 12px; padding: 7px 9px; } .input-continue { padding: 11px 13px; gap: 8px; } }
+
+/* Preserve furniture identity and ease between layout proposals in both views. */
+.floor-area .drag-item, .floor-area .object-3d {
+  transition: left .8s cubic-bezier(.22,1,.36,1), top .8s cubic-bezier(.22,1,.36,1), width .8s cubic-bezier(.22,1,.36,1), height .8s cubic-bezier(.22,1,.36,1), box-shadow .25s ease;
+}
+.floor-area .drag-item:active { transition: none; }
+@media (prefers-reduced-motion: reduce) { .floor-area .drag-item, .floor-area .object-3d { transition: none; } }

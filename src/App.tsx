@@ -821,7 +821,7 @@ function FloorPlan({
             <svg className="plan-light" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M38 0H66L100 53V78L38 16Z" /><path d="M0 45L30 75H0Z" /></svg>
             <div className="room-window"><i /><i /></div>
             <div className="room-door"><svg viewBox="0 0 100 100" aria-hidden="true"><path d="M2 98V2M2 2A96 96 0 0 1 98 98" /></svg></div>
-            {furniture.map((item) => <Furniture2D key={`${layoutKey}-${item.id}`} item={item} onMove={moveFurniture} />)}
+            {furniture.map((item) => <Furniture2D key={item.id} item={item} onMove={moveFurniture} />)}
             {state === "decision" && <div className="corridor-zone" />}
           {state === "decision" && <div className="conflict"><i>!</i><span>Attempt 01<b>通道过窄</b></span></div>}
           </div>
