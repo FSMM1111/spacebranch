@@ -1008,3 +1008,14 @@ button { color: inherit; }
 .analysis-steps > div.active { border-color: #aaa; background: #f6f6f6; }
 .analysis-steps > div.active > i, .analysis-steps > div.done > i { color: #fff; background: var(--action); }
 button:focus-visible { outline: 2px solid #555; outline-offset: 3px; }
+
+/* Cabinets open toward the room on their long, right-hand face. */
+.model-right .model-cabinet-doors { flex-direction: column; }
+.model-right .model-cabinet-doors > span::after { right: auto; left: 43%; top: auto; bottom: 12%; height: 2px; width: 13%; }
+.model-right .model-cabinet-doors > span:last-child::after { left: 43%; top: 12%; bottom: auto; }
+.model-right .model-shelves { flex-direction: row; }
+.model-right .model-shelves > span { flex-direction: column; justify-content: flex-start; align-items: start; border-bottom: 0; border-right: 3px solid #ededed; padding: 3px 0 3px 2px; }
+.model-right .model-shelves > span:last-child { border-right: 0; }
+.model-right .model-shelves i { width: 75%; height: 3px; border-left: 0; border-bottom: 1px solid #aaa; }
+.model-right .model-shelves i:nth-child(2) { width: 90%; height: 3px; }
+.model-right .model-shelves i:last-child { width: 65%; height: 3px; transform: rotate(-12deg); }

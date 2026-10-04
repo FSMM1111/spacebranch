@@ -716,15 +716,15 @@ function Furniture2D({ item, onMove }: { item: FurnitureModule; onMove: (id: str
   )
 }
 
-function ModelBlock({ x = 0, y = 0, width = 100, depth = 100, height, z = 0, className = "", children, front }: {
-  x?: number; y?: number; width?: number; depth?: number; height: number; z?: number; className?: string; children?: React.ReactNode; front?: React.ReactNode
+function ModelBlock({ x = 0, y = 0, width = 100, depth = 100, height, z = 0, className = "", children, front, right }: {
+  x?: number; y?: number; width?: number; depth?: number; height: number; z?: number; className?: string; children?: React.ReactNode; front?: React.ReactNode; right?: React.ReactNode
 }) {
   return <div className={`model-block ${className}`} style={{ left: `${x}%`, top: `${y}%`, width: `${width}%`, height: `${depth}%`, transform: `translateZ(${z}px)`, "--part-height": `${height}px` } as React.CSSProperties}>
     <div className="model-face model-top">{children}</div>
     <div className="model-face model-front">{front}</div>
     <div className="model-face model-back" />
     <div className="model-face model-left" />
-    <div className="model-face model-right" />
+    <div className="model-face model-right">{right}</div>
   </div>
 }
 
@@ -739,8 +739,8 @@ function ThreeDBox({ item }: { item: FurnitureModule }) {
       <ModelBlock depth={3} height={32} className="bed-headboard" />
     </>}
     {item.id === "desk" && <ModelBlock height={item.height} className="model-solid-desk">{label}<span className="model-surface-outline" /></ModelBlock>}
-    {item.id === "wardrobe" && <ModelBlock height={item.height} className="model-cabinet" front={<div className="model-cabinet-doors"><span /><span /></div>}>{label}</ModelBlock>}
-    {item.id === "shelf" && <ModelBlock height={item.height} className="model-bookcase" front={<div className="model-shelves">{[0,1,2,3].map(i=><span key={i}><i /><i /><i /></span>)}</div>}>{label}</ModelBlock>}
+    {item.id === "wardrobe" && <ModelBlock height={item.height} className="model-cabinet" right={<div className="model-cabinet-doors"><span /><span /></div>}>{label}</ModelBlock>}
+    {item.id === "shelf" && <ModelBlock height={item.height} className="model-bookcase" right={<div className="model-shelves">{[0,1,2,3].map(i=><span key={i}><i /><i /><i /></span>)}</div>}>{label}</ModelBlock>}
     {item.id === "chair" && <ModelBlock height={28} className="model-solid-chair">{label}<span className="model-seat-outline" /></ModelBlock>}
     {item.id === "night" && <>
       <ModelBlock height={24} className="model-nightstand" front={<div className="model-drawers"><span /><span /></div>}>{label}</ModelBlock>
