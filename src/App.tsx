@@ -718,6 +718,38 @@ function furnitureLayout(layout: string): FurnitureModule[] {
   return modules.map((item) => ({ ...item, ...updates[item.id] }))
 }
 
+// Reorganize movable furniture for shared living; retain the bed and fixed storage.
+function sharedPetFurniture(base: FurnitureModule[]): FurnitureModule[] {
+  const movable = ["desk", "shelf", "basket", "chair"]
+  const placed = base.filter(item => !movable.includes(item.id))
+  for (const id of movable) {
+    const original = base.find(item => item.id === id)
+    if (!original) continue
+    // Turn the desk toward the window without changing its footprint area.
+    const item = id === "desk" && original.depth > original.width
+      ? { ...original, width: original.depth, depth: original.width } : original
+    const desk = placed.find(other => other.id === "desk")
+    const shelf = placed.find(other => other.id === "shelf")
+    const preferred = id === "desk" ? { x: 22, y: 0 }
+      : id === "shelf" ? { x: 0, y: 39 }
+      : id === "basket" ? { x: (shelf?.width ?? 9) + 1, y: 60 }
+      : { x: (desk?.x ?? 22) + ((desk?.width ?? 25) - item.width) / 2, y: (desk?.depth ?? 16) + 1 }
+    const candidates: FurnitureModule[] = []
+    for (let y = 0; y <= 100 - item.depth; y++) for (let x = 0; x <= 100 - item.width; x++) {
+      // Keep the entrance and central pet/activity aisle clear.
+      if (x < 44 && y + item.depth > 78) continue
+      if (x < 64 && x + item.width > 28 && y < 80 && y + item.depth > 34) continue
+      const candidate = { ...item, x, y }
+      if (!placed.some(other => overlaps(candidate, other))) candidates.push(candidate)
+    }
+    candidates.sort((a, b) => Math.hypot(a.x - preferred.x, a.y - preferred.y) - Math.hypot(b.x - preferred.x, b.y - preferred.y))
+    // Retain an unusual edited room if the complete arrangement cannot fit.
+    if (!candidates[0]) return base
+    placed.push(candidates[0])
+  }
+  return base.map(item => placed.find(other => other.id === item.id) || item)
+}
+
 // Keep new modules along the room perimeter or fixed furniture, leaving a continuous aisle.
 function petLayout(base: FurnitureModule[], kind: PetKind, option: number): FurnitureModule[] {
   const modules: FurnitureModule[] = [
@@ -726,7 +758,8 @@ function petLayout(base: FurnitureModule[], kind: PetKind, option: number): Furn
     { id: "pet-food", label: "食水区", x: 84, y: 90, width: 16, depth: 10, height: 5 },
     ...(kind === "dog" && option !== 2 ? [{ id: "pet-play", label: "玩具收纳", x: 10, y: 38, width: 12, depth: 12, height: 14 }] : []),
   ]
-  const occupied = [...base]
+  const arranged = option === 0 ? sharedPetFurniture(base) : base
+  const occupied = [...arranged]
   for (const item of modules) {
     const preferred = option === 1 ? { ...item, x: item.id === "pet-food" ? 10 : item.x, y: item.id === "pet-food" ? 38 : item.y } : item
     const candidates: { x: number; y: number; score: number }[] = []
@@ -738,7 +771,7 @@ function petLayout(base: FurnitureModule[], kind: PetKind, option: number): Furn
         if (occupied.some(other => x < other.x + other.width + 1 && x + item.width + 1 > other.x && y < other.y + other.depth + 1 && y + item.depth + 1 > other.y)) continue
         const wallGap = Math.min(x, y, 100 - x - item.width, 100 - y - item.depth)
         // A cabinet edge also counts as the room edge, never a floating central island.
-        const besideFixed = base.some(other =>
+        const besideFixed = arranged.some(other =>
           ((Math.abs(x - other.x - other.width) <= 2 || Math.abs(x + item.width - other.x) <= 2) && y < other.y + other.depth && y + item.depth > other.y) ||
           ((Math.abs(y - other.y - other.depth) <= 2 || Math.abs(y + item.depth - other.y) <= 2) && x < other.x + other.width && x + item.width > other.x))
         if (wallGap > 1 && !besideFixed) continue
@@ -996,7 +1029,7 @@ const options = [
 ]
 
 const petOptions = [
-  ["Shared Living", "分区共处", "食水与清洁分开", "保留办公区", "安静休息"],
+  ["Shared Living", "分区共处", "重排原有家具", "食水与清洁分开", "连续活动空间"],
   ["Play Space", "活动优先", "模块沿边排布", "释放中央空间", "活动更自由"],
   ["Essential Kit", "最小改动", "三件基础模块", "后续逐步添置", "保留原有家具"],
 ]
@@ -1069,7 +1102,7 @@ function AgentPanel({
               <div>
                 <b>{scenario === "pet" ? "为下个月的养宠生活预留空间" : "已完成空间分析"}</b>
                 {scenario === "pet" ? <>
-                  <p>保留已确认的办公家具位置，新增食水、休息与清洁模块；清洁区和食水区分开，中央通道优先留空。</p>
+                  <p>提供家具重排、活动优先与最小改动三种策略。第一套会重新安排原有家具，第三套保留原布局；食水和清洁区分开，中央通道优先留空。</p>
                   <div className="pet-kind-switch" role="group" aria-label="宠物类型">{(["cat", "dog"] as const).map(kind => <button key={kind} aria-pressed={petKind === kind} onClick={() => onPetKindChange(kind)}>{kind === "cat" ? "计划养猫" : "计划养狗"}</button>)}</div>
                   <small className="pet-note">小型宠物示意布局 · 可切换类型后再预览</small>
                 </> : <><p>我检查了墙面、窗户、门的开合和主要通道，并自主尝试了三种布局策略。</p><ul><li>固定家具保持贴墙</li><li>主通道优先保持 80 cm 以上</li><li>书桌避开门洞与窗户开口</li></ul></>}
@@ -1104,7 +1137,7 @@ function AgentPanel({
                   <button disabled={state === "applied"} onClick={() => onSelect((selectedOption + 1) % currentOptions.length)} aria-label="下一个方案">›</button>
                 </span>
               </div>
-              {scenario === "pet" ? <div className="pet-module-list"><b>新增养宠模块</b>{furniture.filter(item => item.id.startsWith("pet-")).map(item => <div key={item.id}><span>{item.label}</span><small>{Math.round(item.width * 4)} × {Math.round(item.depth * 3)} cm</small></div>)}<p>{selectedOption === 2 ? "先配置休息、食水和清洁三个基础区域。" : "养宠模块沿墙或固定家具边缘排布，中央过道保持留空。"}</p>{furniture.filter(item => item.id.startsWith("pet-")).length < (petKind === "dog" && selectedOption !== 2 ? 4 : 3) && <p role="status">当前空闲位置不足，部分模块暂未加入。可先移动现有家具，再重新生成养宠方案。</p>}<small>尺寸与位置为示意，可拖动微调后确认。</small></div> : <div className="metric-charts">
+              {scenario === "pet" ? <div className="pet-module-list"><b>新增养宠模块</b>{furniture.filter(item => item.id.startsWith("pet-")).map(item => <div key={item.id}><span>{item.label}</span><small>{Math.round(item.width * 4)} × {Math.round(item.depth * 3)} cm</small></div>)}<p>{selectedOption === 0 ? "重排书桌、椅子、书柜与置物筐，保留床、床头柜和衣柜位置；办公区集中到窗边，腾出连续活动空间。" : selectedOption === 2 ? "先配置休息、食水和清洁三个基础区域。" : "养宠模块沿墙或固定家具边缘排布，中央过道保持留空。"}</p>{furniture.filter(item => item.id.startsWith("pet-")).length < (petKind === "dog" && selectedOption !== 2 ? 4 : 3) && <p role="status">当前空闲位置不足，部分模块暂未加入。可先移动现有家具，再重新生成养宠方案。</p>}<small>尺寸与位置为示意，可拖动微调后确认。</small></div> : <div className="metric-charts">
                 {comparisonMetrics.map((metric) => (
                   <section className="metric-chart" key={metric.label}>
                     <b>{metric.label}</b>
