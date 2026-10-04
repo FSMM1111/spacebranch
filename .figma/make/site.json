@@ -1,0 +1,11 @@
+{
+  "description": "SpaceBranch is an AI spatial co-design prototype for multimodal space understanding, storage planning, and plan/elevation comparison.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  },
+  "title": "SpaceBranch"
+}
