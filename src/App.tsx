@@ -655,6 +655,36 @@ function placementStyle(item: FurniturePlacement): React.CSSProperties {
   return { left: `${item.x}%`, top: `${item.y}%`, right: "auto", bottom: "auto", width: `${item.width}%`, height: `${item.depth}%` }
 }
 
+function FurnitureSymbol({ type }: { type: string }) {
+  return (
+    <svg className={`plan-symbol symbol-${type}`} viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      {type === "bed" && <>
+        <rect x="4" y="3" width="92" height="94" rx="1" />
+        <rect x="9" y="8" width="35" height="18" rx="2" /><rect x="56" y="8" width="35" height="18" rx="2" />
+        <path d="M5 33H95M8 37H92V92H8Z" /><path className="symbol-fine" d="M8 40L92 45M8 44L92 49" />
+      </>}
+      {type === "wardrobe" && <>
+        <rect x="4" y="3" width="92" height="94" /><path d="M50 3V97M4 50H96" />
+        <path className="symbol-dashed" d="M4 3L50 50L96 3M4 97L50 50L96 97" />
+        <path d="M45 22V31M55 22V31M45 69V78M55 69V78" />
+      </>}
+      {type === "desk" && <>
+        <rect x="4" y="5" width="92" height="90" rx="2" />
+        <rect x="25" y="18" width="50" height="27" rx="1" /><path d="M46 45V51H54V45M35 51H65" />
+        <rect x="29" y="60" width="42" height="10" rx="1" /><rect x="78" y="59" width="9" height="12" rx="3" />
+        <path className="symbol-fine" d="M34 63H65M34 67H65" />
+      </>}
+      {type === "shelf" && <>
+        <rect x="5" y="3" width="90" height="94" /><path d="M5 25H95M5 49H95M5 73H95" />
+        <path className="symbol-fine" d="M18 6V22M30 6V22M45 6V22M61 7L72 22M18 29V46M34 29V46M50 29V46M66 29V46M18 53V70M32 53V70M47 53V70M66 53L77 70M18 77V94M35 77V94M51 77V94" />
+      </>}
+      {type === "night" && <><rect x="5" y="5" width="90" height="90" rx="2" /><circle cx="50" cy="44" r="22" /><circle cx="50" cy="44" r="5" /><path d="M5 82H95M42 88H58" /></>}
+      {type === "basket" && <><rect x="7" y="8" width="86" height="84" rx="10" /><rect x="14" y="16" width="72" height="68" rx="7" /><path className="symbol-fine" d="M26 16V84M42 16V84M58 16V84M74 16V84M14 32H86M14 50H86M14 68H86" /></>}
+      {type === "chair" && <><rect className="chair-backrest" x="16" y="5" width="68" height="14" rx="5" /><rect x="19" y="25" width="62" height="56" rx="12" /><path d="M12 27V67M88 27V67M12 27H19M81 27H88M50 81V94M29 94H71" /></>}
+    </svg>
+  )
+}
+
 function Furniture2D({ item, onMove }: { item: FurnitureModule; onMove: (id: string, placement: FurniturePlacement) => void }) {
   const drag = useRef<{ x: number; y: number; startX: number; startY: number; roomWidth: number; roomDepth: number } | null>(null)
   return (
@@ -680,11 +710,8 @@ function Furniture2D({ item, onMove }: { item: FurnitureModule; onMove: (id: str
       onPointerCancel={() => { drag.current = null }}
       onLostPointerCapture={() => { drag.current = null }}
     >
+      <FurnitureSymbol type={item.id} />
       <span className="furniture-label">{item.label}</span>
-      {item.id === "bed" && <span className="bed-linens"><i /><i /></span>}
-      {item.id === "desk" && <span className="desk-top"><i className="laptop" /><i className="plant" /></span>}
-      {item.id === "wardrobe" && <span className="wardrobe-doors"><i /><i /></span>}
-      {item.id === "shelf" && <span className="shelf-lines"><i /><i /><i /></span>}
     </button>
   )
 }
@@ -764,12 +791,13 @@ function FloorPlan({
         ) : (
         <div className="plan-wrap">
           <div className="window-title">窗户</div>
-          <div className="measure measure-y">3 m</div>
-          <div className="measure measure-x">4 m</div>
+          <div className="measure measure-y">3 000</div>
+          <div className="measure measure-x">4 000</div>
           <div className="room-plan" aria-label="卧室二维平面图">
             <div className="floor-grid" />
+            <svg className="plan-light" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M38 0H66L100 53V78L38 16Z" /><path d="M0 45L30 75H0Z" /></svg>
             <div className="room-window"><i /><i /></div>
-            <div className="room-door" />
+            <div className="room-door"><svg viewBox="0 0 100 100" aria-hidden="true"><path d="M2 98V2M2 2A96 96 0 0 1 98 98" /></svg></div>
             {furniture.map((item) => <Furniture2D key={`${layoutKey}-${item.id}`} item={item} onMove={moveFurniture} />)}
             {state === "decision" && <div className="corridor-zone" />}
           {state === "decision" && <div className="conflict"><i>!</i><span>Attempt 01<b>通道过窄</b></span></div>}

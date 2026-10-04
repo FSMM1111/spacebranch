@@ -923,3 +923,33 @@ button { color: inherit; }
 .simple-space-preview .editable-opening span { color: #666; }
 .simple-space-preview .primary, .simple-space-preview .custom-furniture-form > span button:last-child { background: #303030; }
 .simple-space-preview .add-furniture > button { color: #444; border-color: #bbb; }
+
+/* Architectural plan symbols: distinct silhouettes and technical linework. */
+.floor-area .room-plan { border: 12px solid #242424; background: #fcfcfc; box-shadow: none; }
+.floor-area .floor-grid { opacity: .35; }
+.plan-light { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; fill: rgba(0,0,0,.025); }
+.floor-area .room-window { top: -12px; height: 12px; border: 0; border-block: 2px solid #999; background: #fff; }
+.floor-area .room-window i { border-right: 1px solid #aaa; margin-block: 2px; }
+.floor-area .room-door { bottom: 0; height: auto; aspect-ratio: 1; background: transparent; border: 0; pointer-events: none; }
+.floor-area .room-door::after { content: ""; position: absolute; left: 0; right: 0; bottom: -12px; height: 12px; background: #fcfcfc; }
+.floor-area .room-door svg { width: 100%; height: 100%; overflow: visible; fill: none; stroke: #8a8a8a; stroke-width: 1; }
+.floor-area .room-door svg path { vector-effect: non-scaling-stroke; }
+.floor-area .drag-item { overflow: visible; background: #f3f3f3; border: 1px solid #c0c0c0; border-radius: 1px; box-shadow: 3px 5px 0 #00000004; }
+.floor-area .drag-item:hover { background: #ededed; border-color: #666; }
+.floor-area .drag-item:active { box-shadow: 4px 6px 10px #00000012; }
+.floor-area .bed-module { background: #f7f7f7; }
+.floor-area .chair { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.floor-area .chair:hover { background: transparent; }
+.plan-symbol { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke: #969b98; stroke-width: .8; pointer-events: none; }
+.plan-symbol path, .plan-symbol rect, .plan-symbol circle { vector-effect: non-scaling-stroke; }
+.plan-symbol .symbol-fine { stroke: #b5b8b6; stroke-width: .65; }
+.plan-symbol .symbol-dashed { stroke: #b7bab8; stroke-width: .6; stroke-dasharray: 2 2; }
+.symbol-bed rect, .symbol-chair rect, .symbol-night circle { fill: #fcfcfc; }
+.symbol-chair .chair-backrest { fill: #e7e9e8; }
+.floor-area .furniture-label { align-self: end; margin-bottom: 8%; padding: 1px 4px; color: #888; background: #ffffffd9; font-size: 9px; line-height: 1.2; }
+.floor-area .chair .furniture-label { margin-bottom: 22%; font-size: 8px; }
+.floor-area .basket-module .furniture-label { margin-bottom: 13%; font-size: 8px; }
+.floor-area .night-module .furniture-label { margin-bottom: 5%; font-size: 8px; }
+.measure { font-size: 10px; letter-spacing: 1px; color: #777; }
+.measure-y::before, .measure-y::after, .measure-x::before, .measure-x::after { background: #aaa; }
+.plan-light { fill: rgba(0,0,0,.025); }
