@@ -709,10 +709,10 @@ function furnitureLayout(layout: string): FurnitureModule[] {
     desk: { x: 27, y: 0, width: 25, depth: 16 }, chair: { x: 33, y: 16 },
     shelf: { y: 38, depth: 30 }, basket: { y: 68 },
   } : layout === "option-1" ? {
-    desk: { x: 28, y: 85, width: 25, depth: 15 }, chair: { x: 34, y: 68 },
+    desk: { x: 28, y: 70, width: 15, depth: 30 }, chair: { x: 44, y: 76 },
     shelf: { y: 38, depth: 30 }, basket: { y: 68 },
   } : layout === "option-2" ? {
-    desk: { x: 22, y: 0, width: 15, depth: 15 }, chair: { x: 23, y: 15 },
+    desk: { x: 22, y: 0, width: 15, depth: 30 }, chair: { x: 23, y: 30 },
     shelf: { y: 38, depth: 30 }, basket: { y: 68 },
   } : {}
   return modules.map((item) => ({ ...item, ...updates[item.id] }))
