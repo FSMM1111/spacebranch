@@ -730,7 +730,6 @@ function ModelBlock({ x = 0, y = 0, width = 100, depth = 100, height, z = 0, cla
 
 function ThreeDBox({ item }: { item: FurnitureModule }) {
   const label = <span className="model-label">{item.label}</span>
-  const legs = (height: number) => [[8, 8], [84, 8], [8, 84], [84, 84]].map(([x, y]) => <ModelBlock key={`${x}-${y}`} x={x} y={y} width={8} depth={8} height={height} className="model-leg" />)
   return <div className={`object-3d ${item.id}-3d`} data-furniture-id={item.id} style={placementStyle(item)}>
     {item.id === "bed" && <>
       <ModelBlock height={9} className="bed-frame" />
@@ -739,23 +738,10 @@ function ThreeDBox({ item }: { item: FurnitureModule }) {
       <ModelBlock x={56} y={8} width={35} depth={18} z={21} height={4} className="model-pillow" />
       <ModelBlock depth={3} height={32} className="bed-headboard" />
     </>}
-    {item.id === "desk" && <>
-      {legs(30)}
-      <ModelBlock z={30} height={4} className="desk-slab">{label}</ModelBlock>
-      <ModelBlock x={46} y={22} width={8} depth={13} z={34} height={4} />
-      <ModelBlock x={25} y={20} width={50} depth={4} z={38} height={15} className="model-monitor" />
-      <ModelBlock x={29} y={60} width={42} depth={10} z={34} height={1} className="model-keyboard" />
-      <ModelBlock x={78} y={59} width={9} depth={12} z={34} height={2} className="model-mouse" />
-    </>}
+    {item.id === "desk" && <ModelBlock height={item.height} className="model-solid-desk">{label}<span className="model-surface-outline" /></ModelBlock>}
     {item.id === "wardrobe" && <ModelBlock height={item.height} className="model-cabinet" front={<div className="model-cabinet-doors"><span /><span /></div>}>{label}</ModelBlock>}
     {item.id === "shelf" && <ModelBlock height={item.height} className="model-bookcase" front={<div className="model-shelves">{[0,1,2,3].map(i=><span key={i}><i /><i /><i /></span>)}</div>}>{label}</ModelBlock>}
-    {item.id === "chair" && <>
-      {legs(17)}
-      <ModelBlock x={19} y={25} width={62} depth={56} z={17} height={4} className="model-seat">{label}</ModelBlock>
-      <ModelBlock x={16} y={5} width={68} depth={14} z={21} height={17} className="model-backrest" />
-      <ModelBlock x={12} y={27} width={7} depth={40} z={23} height={3} className="model-armrest" />
-      <ModelBlock x={81} y={27} width={7} depth={40} z={23} height={3} className="model-armrest" />
-    </>}
+    {item.id === "chair" && <ModelBlock height={28} className="model-solid-chair">{label}<span className="model-seat-outline" /></ModelBlock>}
     {item.id === "night" && <>
       <ModelBlock height={24} className="model-nightstand" front={<div className="model-drawers"><span /><span /></div>}>{label}</ModelBlock>
       <ModelBlock x={37} y={29} width={26} depth={26} z={24} height={2} className="model-lamp-base" />
