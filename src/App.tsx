@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 type Screen = "onboard" | "brief" | "workspace"
 type Scenario = "office" | "pet"
@@ -652,29 +652,38 @@ function furnitureLayout(layout: string): FurnitureModule[] {
   return modules.map((item) => ({ ...item, ...updates[item.id] }))
 }
 
-// Place new pet modules around the confirmed office layout, without moving existing furniture.
+// Keep new modules along the room perimeter or fixed furniture, leaving a continuous aisle.
 function petLayout(base: FurnitureModule[], kind: PetKind, option: number): FurnitureModule[] {
   const modules: FurnitureModule[] = [
-    { id: "pet-bed", label: "宠物窝", x: 78, y: 82, width: 18, depth: 18, height: 12 },
-    { id: "pet-food", label: "食水区", x: 44, y: 44, width: 16, depth: 10, height: 8 },
-    { id: "pet-clean", label: kind === "cat" ? "猫砂盆" : "如厕垫", x: 60, y: 82, width: 16, depth: 16, height: kind === "cat" ? 16 : 3 },
-    ...(option === 2 ? [] : [{ id: "pet-play", label: kind === "cat" ? "猫抓柱" : "玩具收纳", x: 24, y: 38, width: 12, depth: 12, height: kind === "cat" ? 48 : 18 }]),
+    { id: "pet-clean", label: kind === "cat" ? "猫砂盆" : "如厕垫", x: 44, y: 84, width: 16, depth: 16, height: kind === "cat" ? 12 : 3 },
+    { id: "pet-bed", label: "宠物窝", x: 64, y: 82, width: 18, depth: 18, height: 10 },
+    { id: "pet-food", label: "食水区", x: 84, y: 90, width: 16, depth: 10, height: 5 },
+    ...(kind === "dog" && option !== 2 ? [{ id: "pet-play", label: "玩具收纳", x: 10, y: 38, width: 12, depth: 12, height: 14 }] : []),
   ]
   const occupied = [...base]
   for (const item of modules) {
-    const preferred = option === 1 ? (item.id === "pet-food" ? { x: 24, y: 44 } : item.id === "pet-play" ? { x: 24, y: 64 } : item) : option === 2 ? (item.id === "pet-food" ? { x: 24, y: 40 } : item) : item
+    const preferred = option === 1 ? { ...item, x: item.id === "pet-food" ? 10 : item.x, y: item.id === "pet-food" ? 38 : item.y } : item
     const candidates: { x: number; y: number; score: number }[] = []
-    for (let y = 36; y <= 100 - item.depth; y += 2) {
-      for (let x = 24; x <= 100 - item.width; x += 2) {
-        // Reserve the door approach, a central 80 cm passage, and window access.
+    for (let y = 0; y <= 100 - item.depth; y++) {
+      for (let x = 0; x <= 100 - item.width; x++) {
+        // Protect the entrance and the full central circulation route.
         if (x < 44 && y + item.depth > 78) continue
-        if (x < 64 && x + item.width > 44 && y < 76 && y + item.depth > 48) continue
+        if (x < 64 && x + item.width > 28 && y < 80 && y + item.depth > 34) continue
         if (occupied.some(other => x < other.x + other.width + 1 && x + item.width + 1 > other.x && y < other.y + other.depth + 1 && y + item.depth + 1 > other.y)) continue
-        candidates.push({ x, y, score: Math.abs(x - preferred.x) + Math.abs(y - preferred.y) })
+        const wallGap = Math.min(x, y, 100 - x - item.width, 100 - y - item.depth)
+        // A cabinet edge also counts as the room edge, never a floating central island.
+        const besideFixed = base.some(other =>
+          ((Math.abs(x - other.x - other.width) <= 2 || Math.abs(x + item.width - other.x) <= 2) && y < other.y + other.depth && y + item.depth > other.y) ||
+          ((Math.abs(y - other.y - other.depth) <= 2 || Math.abs(y + item.depth - other.y) <= 2) && x < other.x + other.width && x + item.width > other.x))
+        if (wallGap > 1 && !besideFixed) continue
+        const clean = occupied.find(other => other.id === "pet-clean")
+        const separation = clean ? Math.hypot(x + item.width / 2 - clean.x - clean.width / 2, y + item.depth / 2 - clean.y - clean.depth / 2) : 100
+        const separationPenalty = item.id === "pet-food" ? Math.max(0, 30 - separation) * 4 : 0
+        candidates.push({ x, y, score: (wallGap <= 1 ? 0 : 30) + Math.abs(x - preferred.x) + Math.abs(y - preferred.y) + separationPenalty })
       }
     }
     candidates.sort((a, b) => a.score - b.score)
-    // Never insert an overlapping module when a manually edited room is full.
+    // If no edge is free, omit the module instead of filling the aisle.
     if (candidates[0]) occupied.push({ ...item, x: candidates[0].x, y: candidates[0].y })
   }
   return occupied
@@ -684,7 +693,7 @@ function placementStyle(item: FurniturePlacement): React.CSSProperties {
   return { left: `${item.x}%`, top: `${item.y}%`, right: "auto", bottom: "auto", width: `${item.width}%`, height: `${item.depth}%` }
 }
 
-function FurnitureSymbol({ type }: { type: string }) {
+function FurnitureSymbol({ type, variant }: { type: string; variant?: string }) {
   return (
     <svg className={`plan-symbol symbol-${type}`} viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
       {type === "bed" && <>
@@ -709,10 +718,10 @@ function FurnitureSymbol({ type }: { type: string }) {
       </>}
       {type === "night" && <><rect x="5" y="5" width="90" height="90" rx="2" /><circle cx="50" cy="44" r="22" /><circle cx="50" cy="44" r="5" /><path d="M5 82H95M42 88H58" /></>}
       {type === "basket" && <><rect x="7" y="8" width="86" height="84" rx="10" /><rect x="14" y="16" width="72" height="68" rx="7" /><path className="symbol-fine" d="M26 16V84M42 16V84M58 16V84M74 16V84M14 32H86M14 50H86M14 68H86" /></>}
-      {type === "pet-bed" && <><rect x="6" y="6" width="88" height="88" rx="20" /><rect x="18" y="18" width="64" height="64" rx="16" /><path d="M32 76H68" /></>}
-      {type === "pet-food" && <><rect x="5" y="12" width="90" height="76" rx="8" /><circle cx="29" cy="50" r="17" /><circle cx="71" cy="50" r="17" /></>}
-      {type === "pet-clean" && <><rect x="6" y="6" width="88" height="88" rx="8" /><rect x="17" y="17" width="66" height="66" rx="4" /><path className="symbol-dashed" d="M24 35H76M24 50H76M24 65H76" /></>}
-      {type === "pet-play" && <><rect x="7" y="7" width="86" height="86" rx="5" /><circle cx="50" cy="50" r="22" /><path d="M37 50H63M50 37V63" /></>}
+      {type === "pet-bed" && <><rect x="5" y="5" width="90" height="90" rx="24" /><rect className="pet-symbol-cushion" x="17" y="17" width="66" height="66" rx="20" /><path className="symbol-fine" d="M29 72Q50 82 71 72" /></>}
+      {type === "pet-food" && <><rect x="4" y="8" width="92" height="84" rx="12" /><ellipse className="pet-symbol-well" cx="28" cy="50" rx="19" ry="28" /><ellipse className="pet-symbol-well" cx="72" cy="50" rx="19" ry="28" /><ellipse className="symbol-fine" cx="28" cy="50" rx="13" ry="19" /><ellipse className="symbol-fine" cx="72" cy="50" rx="13" ry="19" /></>}
+      {type === "pet-clean" && <><rect x="5" y="5" width="90" height="90" rx="10" /><rect className="pet-symbol-tray" x="15" y="15" width="70" height="70" rx="6" />{variant === "如厕垫" ? <path className="symbol-fine" d="M33 18V82M50 18V82M67 18V82M18 33H82M18 50H82M18 67H82" /> : <><path className="symbol-fine" d="M24 29H76M24 42H76M24 55H76M24 68H76" /><path d="M37 92H63" /></>}</>}
+      {type === "pet-play" && <><rect x="6" y="6" width="88" height="88" rx="9" /><rect x="16" y="16" width="68" height="68" rx="5" /><path d="M36 48H64V54H36Z" /></>}
       {type === "chair" && <><rect className="chair-backrest" x="16" y="5" width="68" height="14" rx="5" /><rect x="19" y="25" width="62" height="56" rx="12" /><path d="M12 27V67M88 27V67M12 27H19M81 27H88M50 81V94M29 94H71" /></>}
     </svg>
   )
@@ -743,7 +752,7 @@ function Furniture2D({ item, onMove }: { item: FurnitureModule; onMove: (id: str
       onPointerCancel={() => { drag.current = null }}
       onLostPointerCapture={() => { drag.current = null }}
     >
-      <FurnitureSymbol type={item.id} />
+      <FurnitureSymbol type={item.id} variant={item.label} />
       <span className="furniture-label">{item.label}</span>
     </button>
   )
@@ -781,7 +790,13 @@ function ThreeDBox({ item }: { item: FurnitureModule }) {
       <ModelBlock x={47} y={39} width={6} depth={6} z={26} height={10} />
       <ModelBlock x={28} y={20} width={44} depth={44} z={36} height={8} className="model-lampshade" />
     </>}
-    {item.id.startsWith("pet-") && <ModelBlock height={item.height} className={`model-pet ${item.id}`}><FurnitureSymbol type={item.id} />{label}</ModelBlock>}
+    {item.id.startsWith("pet-") && <ModelBlock height={item.height} className={`model-pet ${item.id} ${item.label === "如厕垫" ? "pet-pad" : ""}`}>
+      {item.id === "pet-bed" && <span className="pet-cushion" />}
+      {item.id === "pet-food" && <div className="pet-bowl-wells"><span /><span /></div>}
+      {item.id === "pet-clean" && <span className="pet-tray-inset" />}
+      {item.id === "pet-play" && <span className="pet-storage-lid" />}
+      {label}
+    </ModelBlock>}
     {item.id === "basket" && <ModelBlock height={14} className="model-basket" front={<FurnitureSymbol type="basket" />}><FurnitureSymbol type="basket" />{label}</ModelBlock>}
   </div>
 }
@@ -983,7 +998,7 @@ function AgentPanel({
                   <button disabled={state === "applied"} onClick={() => onSelect((selectedOption + 1) % currentOptions.length)} aria-label="下一个方案">›</button>
                 </span>
               </div>
-              {scenario === "pet" ? <div className="pet-module-list"><b>新增养宠模块</b>{furniture.filter(item => item.id.startsWith("pet-")).map(item => <div key={item.id}><span>{item.label}</span><small>{Math.round(item.width * 4)} × {Math.round(item.depth * 3)} cm</small></div>)}<p>{selectedOption === 2 ? "先配置休息、食水和清洁三个基础区域。" : "增加独立活动模块，让办公与养宠各有位置。"}</p>{furniture.filter(item => item.id.startsWith("pet-")).length < (selectedOption === 2 ? 3 : 4) && <p role="status">当前空闲位置不足，部分模块暂未加入。可先移动现有家具，再重新生成养宠方案。</p>}<small>尺寸与位置为示意，可拖动微调后确认。</small></div> : <div className="metric-charts">
+              {scenario === "pet" ? <div className="pet-module-list"><b>新增养宠模块</b>{furniture.filter(item => item.id.startsWith("pet-")).map(item => <div key={item.id}><span>{item.label}</span><small>{Math.round(item.width * 4)} × {Math.round(item.depth * 3)} cm</small></div>)}<p>{selectedOption === 2 ? "先配置休息、食水和清洁三个基础区域。" : "养宠模块沿墙或固定家具边缘排布，中央过道保持留空。"}</p>{furniture.filter(item => item.id.startsWith("pet-")).length < (petKind === "dog" && selectedOption !== 2 ? 4 : 3) && <p role="status">当前空闲位置不足，部分模块暂未加入。可先移动现有家具，再重新生成养宠方案。</p>}<small>尺寸与位置为示意，可拖动微调后确认。</small></div> : <div className="metric-charts">
                 {comparisonMetrics.map((metric) => (
                   <section className="metric-chart" key={metric.label}>
                     <b>{metric.label}</b>
@@ -1053,7 +1068,7 @@ function Workspace() {
   const [layoutEdits, setLayoutEdits] = useState<Record<string, Record<string, FurniturePlacement>>>({})
   const layout = state === "preview" || state === "applied" ? `option-${selectedOption}` : state === "decision" ? "decision" : "base"
   const layoutKey = `${scenario}-${scenario === "pet" ? petKind : ""}-${layout}`
-  const base = scenario === "pet" ? petLayout(officeBase, petKind, selectedOption) : furnitureLayout(layout)
+  const base = useMemo(() => scenario === "pet" ? petLayout(officeBase, petKind, selectedOption) : furnitureLayout(layout), [scenario, officeBase, petKind, selectedOption, layout])
   const furniture = base.map(item => ({ ...item, ...layoutEdits[layoutKey]?.[item.id] }))
   const explore = (request: string) => {
     if (/宠物|养猫|养狗|养宠|猫咪|狗狗/.test(request)) {
