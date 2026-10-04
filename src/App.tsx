@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react"
 
 type Screen = "onboard" | "brief" | "workspace"
 type WorkspaceState = "idle" | "decision" | "preview" | "applied"
-type InputMode = "text" | "camera" | "reference"
+type BriefInput = { text: string; photos: number; videos: number; references: number }
+type InputAttachment = { id: string; name: string; url: string; media: "photo" | "video"; kind: "space" | "reference" }
 
 function Mark({ blue = false }: { blue?: boolean }) {
   return (
@@ -29,31 +30,35 @@ function BrandHeader({ status }: { status?: string }) {
   )
 }
 
-const modeInfo = {
-  text: {
-    tag: "TEXT",
-    title: "文字描述",
-    detail: "说变化、目标与限制",
-    icon: "/assets/input-text.svg",
-  },
-  camera: {
-    tag: "CAMERA",
-    title: "拍照 / 录像",
-    detail: "让我看见真实空间",
-    icon: "/assets/input-camera.svg",
-  },
-  reference: {
-    tag: "REFERENCE",
-    title: "收纳案例",
-    detail: "告诉我你喜欢什么",
-    icon: "/assets/input-reference.svg",
-  },
-}
-
-function Onboard({ onContinue }: { onContinue: () => void }) {
-  const [mode, setMode] = useState<InputMode>("text")
+function Onboard({ onContinue }: { onContinue: (input: BriefInput) => void }) {
   const [text, setText] = useState("")
+  const [attachments, setAttachments] = useState<InputAttachment[]>([])
+  const [dragging, setDragging] = useState(false)
+  const [fileError, setFileError] = useState("")
   const fileRef = useRef<HTMLInputElement>(null)
+  const referenceRef = useRef<HTMLInputElement>(null)
+  const previewUrls = useRef(new Set<string>())
+  useEffect(() => () => { previewUrls.current.forEach(url => URL.revokeObjectURL(url)) }, [])
+
+  const addFiles = (files: FileList | File[], kind: InputAttachment["kind"]) => {
+    const added: InputAttachment[] = []
+    let unsupported = false
+    Array.from(files).forEach(file => {
+      const video = file.type.startsWith("video/") || /\.(mp4|mov|webm|m4v)$/i.test(file.name)
+      const image = file.type.startsWith("image/") || /\.(jpe?g|png|heic|heif|webp|gif)$/i.test(file.name)
+      if (!video && !image) { unsupported = true; return }
+      const url = URL.createObjectURL(file)
+      previewUrls.current.add(url)
+      added.push({ id: crypto.randomUUID(), name: file.name, url, media: video ? "video" : "photo", kind })
+    })
+    setAttachments(previous => [...previous, ...added])
+    setFileError(unsupported ? "请添加照片或视频文件；参考链接可以直接粘贴在文字中。" : "")
+  }
+  const removeAttachment = (item: InputAttachment) => {
+    URL.revokeObjectURL(item.url)
+    previewUrls.current.delete(item.url)
+    setAttachments(previous => previous.filter(file => file.id !== item.id))
+  }
 
   return (
     <div className="onboard-shell">
@@ -63,53 +68,47 @@ function Onboard({ onContinue }: { onContinue: () => void }) {
           <div className="onboard-title">
             <Mark blue />
             <h1>说说生活正在发生的变化</h1>
-            <p>选择最省力的方式。Agent 会把不同证据合并成一个空间任务。</p>
+            <p>写下想法，添加空间照片、视频或参考案例，一起开始。</p>
           </div>
-          <div className="mode-grid">
-            {(Object.keys(modeInfo) as InputMode[]).map((id) => {
-              const item = modeInfo[id]
-              return (
-                <button
-                  className={`mode-card ${mode === id ? "active" : ""}`}
-                  key={id}
-                  onClick={() => setMode(id)}
-                >
-                  <span className={`mode-tag ${id}`}>{item.tag}</span>
-                  <img src={item.icon} alt="" />
-                  <b>{item.title}</b>
-                  <small>{item.detail}</small>
-                </button>
-              )
-            })}
-          </div>
-          <div className="input-panel">
-            {mode === "text" ? (
-              <>
-                <textarea
-                  value={text}
-                  onChange={(event) => setText(event.target.value)}
-                  placeholder="例如：下个月开始长期居家办公，希望卧室能容纳一个舒适的工作区，但不想让休息区变得拥挤。"
-                />
-                <div className="input-footer">
-                  <span>描述越具体，空间推导越准确</span>
-                  <button onClick={onContinue} disabled={!text.trim()}>继续</button>
+          <div className={`unified-input-card ${dragging ? "is-dragging" : ""}`}
+            onDragOver={event => { event.preventDefault(); setDragging(true) }}
+            onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false) }}
+            onDrop={event => { event.preventDefault(); setDragging(false); addFiles(event.dataTransfer.files, "space") }}
+          >
+            <textarea aria-label="空间任务描述" value={text} onChange={event => setText(event.target.value)}
+              placeholder="描述生活变化、空间需求或你喜欢的样子…也可以粘贴参考链接。"
+              onPaste={event => { if (event.clipboardData.files.length) { event.preventDefault(); addFiles(event.clipboardData.files, "space") } }}
+            />
+            {attachments.length > 0 && <div className="input-attachments" aria-label="已添加的附件">
+              {attachments.map(item => <article className="input-attachment" key={item.id}>
+                <div className="attachment-preview">
+                  {item.media === "video" ? <video src={item.url} controls preload="metadata" /> : <img src={item.url} alt={item.name} onError={event => { event.currentTarget.style.opacity = "0" }} />}
+                  <button className="remove-attachment" aria-label={`移除 ${item.name}`} onClick={() => removeAttachment(item)}>×</button>
                 </div>
-              </>
-            ) : (
-              <button className="drop-zone" onClick={() => fileRef.current?.click()}>
-                <b>{mode === "camera" ? "选择照片或视频" : "选择参考案例"}</b>
-                <span>点击选择或拖拽到这里 · JPG、PNG、HEIC、MOV、MP4</span>
-              </button>
-            )}
-            <input ref={fileRef} hidden type="file" accept="image/*,video/*" />
+                <b title={item.name}>{item.name}</b>
+                <small>{item.kind === "reference" ? "参考案例" : item.media === "video" ? "空间视频" : "空间照片"}</small>
+              </article>)}
+            </div>}
+            {fileError && <p className="input-file-error" role="alert">{fileError}</p>}
+            <div className="unified-input-footer">
+              <div className="input-add-actions">
+                <button onClick={() => fileRef.current?.click()}><span aria-hidden="true">＋</span> 照片 / 视频</button>
+                <button onClick={() => referenceRef.current?.click()}><span aria-hidden="true">＋</span> 参考案例</button>
+              </div>
+              <button className="primary input-continue" disabled={!text.trim() && attachments.length === 0}
+                onClick={() => onContinue({ text: text.trim(), photos: attachments.filter(item => item.kind === "space" && item.media === "photo").length, videos: attachments.filter(item => item.kind === "space" && item.media === "video").length, references: attachments.filter(item => item.kind === "reference").length })}>继续 <span aria-hidden="true">→</span></button>
+            </div>
+            <input ref={fileRef} hidden type="file" multiple accept="image/*,video/*,.heic,.heif,.mov" onChange={event => { if (event.target.files) addFiles(event.target.files, "space"); event.target.value = "" }} />
+            <input ref={referenceRef} hidden type="file" multiple accept="image/*,video/*,.heic,.heif,.mov" onChange={event => { if (event.target.files) addFiles(event.target.files, "reference"); event.target.value = "" }} />
           </div>
+          <p className="unified-input-hint">文字、照片、视频和参考案例可混合添加 · 支持拖拽或粘贴图片</p>
         </main>
       </div>
     </div>
   )
 }
 
-function SpaceBrief({ onStart }: { onStart: () => void }) {
+function SpaceBrief({ onStart, input }: { onStart: () => void; input: BriefInput }) {
   const analysisSteps = [
     ["读取生活变化", "识别长期居家办公与桌面增长"],
     ["解析空间证据", "定位墙体、门窗和现有家具"],
@@ -123,7 +122,7 @@ function SpaceBrief({ onStart }: { onStart: () => void }) {
   const [closing, setClosing] = useState(false)
   const [fixedConstraint, setFixedConstraint] = useState<"fixed" | "adjustable">("fixed")
   const [briefFields, setBriefFields] = useState({
-    change: "长期居家办公，桌面物品明显增加",
+    change: input.text || "根据空间影像和参考案例优化布局",
     space: "12 ㎡卧室；桌面拥挤；窗边仍有可利用区域",
     items: "高频：电脑 / 线材 / 文件；低频：相机配件 / 收藏品",
     preference: "桌面保持留白；更偏隐藏式收纳",
@@ -191,9 +190,9 @@ function SpaceBrief({ onStart }: { onStart: () => void }) {
         <div className="sources">
           <h3>Sources</h3>
           {[
-            ["T", "文字", "1 条描述"],
-            ["P", "空间影像", "4 张照片 / 1 段视频"],
-            ["R", "参考案例", "2 个案例"],
+            ["T", "文字", input.text ? "1 条描述" : "未添加"],
+            ["P", "空间影像", `${input.photos} 张照片 / ${input.videos} 段视频`],
+            ["R", "参考案例", `${input.references} 个案例`],
           ].map(([letter, title, detail], index) => (
             <div className={`source source-${index}`} key={letter}>
               <span>{letter}</span>
@@ -1039,12 +1038,13 @@ function Workspace() {
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("onboard")
+  const [input, setInput] = useState<BriefInput>({ text: "", photos: 0, videos: 0, references: 0 })
 
   if (screen === "workspace") return <Workspace />
   return (
     <>
-      <Onboard onContinue={() => setScreen("brief")} />
-      {screen === "brief" && <SpaceBrief onStart={() => setScreen("workspace")} />}
+      <Onboard onContinue={value => { setInput(value); setScreen("brief") }} />
+      {screen === "brief" && <SpaceBrief input={input} onStart={() => setScreen("workspace")} />}
     </>
   )
 }

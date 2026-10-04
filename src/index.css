@@ -1019,3 +1019,27 @@ button:focus-visible { outline: 2px solid #555; outline-offset: 3px; }
 .model-right .model-shelves i { width: 75%; height: 3px; border-left: 0; border-bottom: 1px solid #aaa; }
 .model-right .model-shelves i:nth-child(2) { width: 90%; height: 3px; }
 .model-right .model-shelves i:last-child { width: 65%; height: 3px; transform: rotate(-12deg); }
+
+/* One composer accepts every kind of space evidence. */
+.unified-input-card { padding: 24px; border: 1px solid #dedede; border-radius: 24px; background: #fafafa; box-shadow: 0 6px 24px #00000006; transition: border-color .2s, box-shadow .2s; }
+.unified-input-card:focus-within { border-color: #aaa; box-shadow: 0 0 0 3px #00000005; }
+.unified-input-card.is-dragging { border: 1px dashed #333; background: #f0f0f0; }
+.unified-input-card > textarea { display: block; width: 100%; min-height: 148px; padding: 0; border: 0; outline: 0; resize: vertical; background: transparent; color: #222; font-size: 17px; line-height: 1.8; }
+.unified-input-card > textarea::placeholder { color: #999; }
+.unified-input-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 20px; }
+.input-add-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.input-add-actions button { display: flex; gap: 5px; align-items: center; padding: 8px 12px; border: 1px solid #e3e3e3; border-radius: 10px; background: #fff; color: #555; font-size: 13px; cursor: pointer; }
+.input-add-actions button:hover { border-color: #aaa; background: #f2f2f2; }
+.input-add-actions button > span { font-size: 18px; line-height: 1; }
+.input-continue { flex: none; display: flex; align-items: center; gap: 14px; padding: 11px 20px; font-size: 14px; border-radius: 12px; }
+.input-continue:disabled { color: #999; background: #e8e8e8; cursor: default; }
+.unified-input-hint { margin: 16px 0 0; text-align: center; color: #999; font-size: 12px; line-height: 1.6; }
+.input-attachments { display: grid; grid-template-columns: repeat(auto-fill,minmax(132px,1fr)); gap: 12px; padding-top: 16px; max-height: 300px; overflow-y: auto; }
+.input-attachment { min-width: 0; padding: 6px; border: 1px solid #e4e4e4; border-radius: 12px; background: #fff; }
+.attachment-preview { position: relative; height: 90px; border-radius: 7px; background: #eee; overflow: hidden; }
+.attachment-preview img, .attachment-preview video { width: 100%; height: 100%; object-fit: cover; }
+.remove-attachment { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; padding: 0; border: 1px solid #ddd; border-radius: 50%; background: #ffffffed; color: #333; line-height: 18px; cursor: pointer; }
+.input-attachment > b { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; font-weight: 500; padding: 7px 3px 0; }
+.input-attachment > small { display: block; padding: 3px; color: #888; font-size: 10px; }
+.input-file-error { color: #555; font-size: 12px; line-height: 1.5; margin-bottom: 0; }
+@media (max-width: 520px) { .unified-input-card { padding: 18px; } .unified-input-footer { gap: 10px; align-items: end; } .input-add-actions { gap: 6px; } .input-add-actions button { font-size: 12px; padding: 7px 9px; } .input-continue { padding: 11px 13px; gap: 8px; } }
