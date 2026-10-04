@@ -1050,3 +1050,25 @@ button:focus-visible { outline: 2px solid #555; outline-offset: 3px; }
 }
 .floor-area .drag-item:active { transition: none; }
 @media (prefers-reduced-motion: reduce) { .floor-area .drag-item, .floor-area .object-3d { transition: none; } }
+
+/* The next life scenario uses the same monochrome module language. */
+.next-scenario { display: block; width: 100%; margin-top: 16px; padding: 16px; text-align: left; border: 1px solid #d9d9d9; border-radius: 12px; background: #f7f7f7; color: #303030; cursor: pointer; }
+.next-scenario small { display: block; color: #888; margin-bottom: 7px; }
+.next-scenario b { display: flex; justify-content: space-between; gap: 12px; }
+.next-scenario:hover { background: #ededed; border-color: #888; }
+.scenario-history { border-left: 2px solid #bbb; padding-left: 12px; }
+.scenario-history small { display: block; color: #888; margin-bottom: 6px; }
+.pet-kind-switch { display: flex; gap: 8px; margin: 12px 0 8px; }
+.pet-kind-switch button { border: 1px solid #ddd; border-radius: 8px; padding: 8px 12px; background: #fafafa; color: #555; cursor: pointer; }
+.pet-kind-switch button[aria-pressed="true"] { background: #303030; color: #fff; border-color: #303030; }
+.pet-note, .pet-module-list > small { color: #888; font-size: 11px; line-height: 1.7; }
+.pet-module-list { margin-top: 16px; }
+.pet-module-list > div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid #eee; }
+.pet-module-list small { color: #888; }
+.pet-bed-module, .pet-food-module, .pet-clean-module, .pet-play-module { background: #eee; border: 1px solid #888; }
+.pet-bed-module { border-radius: 8px; }
+.model-pet .model-top > svg { position: absolute; inset: 8%; width: 84%; height: 84%; fill: none; stroke: #777; stroke-width: 1.3; }
+.model-pet.pet-bed .model-face { background: #e6e6e6; }
+.model-pet.pet-food .model-face { background: #f2f2f2; }
+.model-pet.pet-clean .model-face { background: #d8d8d8; }
+.model-pet .model-label { font-size: 8px; }

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react"
 
 type Screen = "onboard" | "brief" | "workspace"
+type Scenario = "office" | "pet"
+type PetKind = "cat" | "dog"
 type WorkspaceState = "idle" | "decision" | "preview" | "applied"
 type BriefInput = { text: string; photos: number; videos: number; references: number }
 type InputAttachment = { id: string; name: string; url: string; media: "photo" | "video"; kind: "space" | "reference" }
@@ -336,7 +338,7 @@ function Calibration({ onConfirm }: { onConfirm: () => void }) {
   )
 }
 
-function MemoryPanel({ state }: { state: WorkspaceState }) {
+function MemoryPanel({ state, scenario, officeDecision }: { state: WorkspaceState; scenario: Scenario; officeDecision: string }) {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
   const expandSection = (section: string) => {
     setExpandedSections((sections) => {
@@ -361,9 +363,9 @@ function MemoryPanel({ state }: { state: WorkspaceState }) {
         <button className={`active ${expandedSections.has("life") ? "expanded" : ""}`} onClick={() => expandSection("life")}>
           <span className="line-icon">♙</span>
           <div>
-            <b>当前生活状态</b><small className="memory-summary">长期居家办公</small>
+            <b>当前生活状态</b><small className="memory-summary">{scenario === "pet" ? "居家办公 · 下个月养宠" : "长期居家办公"}</small>
             <span className="memory-hover-detail">
-              <b>卧室兼办公</b>
+              <b>{scenario === "pet" ? "办公与宠物共处" : "卧室兼办公"}</b>
               <small>每周 5 天 · 约 8h / 天</small>
               <em>共用 12㎡</em>
             </span>
@@ -382,10 +384,10 @@ function MemoryPanel({ state }: { state: WorkspaceState }) {
         <button className={expandedSections.has("decisions") ? "expanded" : ""} onClick={() => expandSection("decisions")}>
           <span className="line-icon">✓</span>
           <div>
-            <b>已确认决策</b><small className="memory-summary">{state === "applied" ? "床尾折叠工作区" : "暂未确认"}</small>
+            <b>已确认决策</b><small className="memory-summary">{officeDecision ? `${officeDecision}${scenario === "pet" && state === "applied" ? " · 养宠布局" : ""}` : "暂未确认"}</small>
             <span className="memory-hover-detail">
               <b>{state === "applied" ? "已应用" : "等待选择"}</b>
-              <small>{state === "applied" ? "书桌贴墙 · 保留主通道" : "预览方案后确认"}</small>
+              <small>{officeDecision ? "保留已确认办公区 · 养宠家具独立排布" : "预览方案后确认"}</small>
             </span>
           </div><i>›</i>
         </button>
@@ -650,6 +652,34 @@ function furnitureLayout(layout: string): FurnitureModule[] {
   return modules.map((item) => ({ ...item, ...updates[item.id] }))
 }
 
+// Place new pet modules around the confirmed office layout, without moving existing furniture.
+function petLayout(base: FurnitureModule[], kind: PetKind, option: number): FurnitureModule[] {
+  const modules: FurnitureModule[] = [
+    { id: "pet-bed", label: "宠物窝", x: 78, y: 82, width: 18, depth: 18, height: 12 },
+    { id: "pet-food", label: "食水区", x: 44, y: 44, width: 16, depth: 10, height: 8 },
+    { id: "pet-clean", label: kind === "cat" ? "猫砂盆" : "如厕垫", x: 60, y: 82, width: 16, depth: 16, height: kind === "cat" ? 16 : 3 },
+    ...(option === 2 ? [] : [{ id: "pet-play", label: kind === "cat" ? "猫抓柱" : "玩具收纳", x: 24, y: 38, width: 12, depth: 12, height: kind === "cat" ? 48 : 18 }]),
+  ]
+  const occupied = [...base]
+  for (const item of modules) {
+    const preferred = option === 1 ? (item.id === "pet-food" ? { x: 24, y: 44 } : item.id === "pet-play" ? { x: 24, y: 64 } : item) : option === 2 ? (item.id === "pet-food" ? { x: 24, y: 40 } : item) : item
+    const candidates: { x: number; y: number; score: number }[] = []
+    for (let y = 36; y <= 100 - item.depth; y += 2) {
+      for (let x = 24; x <= 100 - item.width; x += 2) {
+        // Reserve the door approach, a central 80 cm passage, and window access.
+        if (x < 44 && y + item.depth > 78) continue
+        if (x < 64 && x + item.width > 44 && y < 76 && y + item.depth > 48) continue
+        if (occupied.some(other => x < other.x + other.width + 1 && x + item.width + 1 > other.x && y < other.y + other.depth + 1 && y + item.depth + 1 > other.y)) continue
+        candidates.push({ x, y, score: Math.abs(x - preferred.x) + Math.abs(y - preferred.y) })
+      }
+    }
+    candidates.sort((a, b) => a.score - b.score)
+    // Never insert an overlapping module when a manually edited room is full.
+    if (candidates[0]) occupied.push({ ...item, x: candidates[0].x, y: candidates[0].y })
+  }
+  return occupied
+}
+
 function placementStyle(item: FurniturePlacement): React.CSSProperties {
   return { left: `${item.x}%`, top: `${item.y}%`, right: "auto", bottom: "auto", width: `${item.width}%`, height: `${item.depth}%` }
 }
@@ -679,6 +709,10 @@ function FurnitureSymbol({ type }: { type: string }) {
       </>}
       {type === "night" && <><rect x="5" y="5" width="90" height="90" rx="2" /><circle cx="50" cy="44" r="22" /><circle cx="50" cy="44" r="5" /><path d="M5 82H95M42 88H58" /></>}
       {type === "basket" && <><rect x="7" y="8" width="86" height="84" rx="10" /><rect x="14" y="16" width="72" height="68" rx="7" /><path className="symbol-fine" d="M26 16V84M42 16V84M58 16V84M74 16V84M14 32H86M14 50H86M14 68H86" /></>}
+      {type === "pet-bed" && <><rect x="6" y="6" width="88" height="88" rx="20" /><rect x="18" y="18" width="64" height="64" rx="16" /><path d="M32 76H68" /></>}
+      {type === "pet-food" && <><rect x="5" y="12" width="90" height="76" rx="8" /><circle cx="29" cy="50" r="17" /><circle cx="71" cy="50" r="17" /></>}
+      {type === "pet-clean" && <><rect x="6" y="6" width="88" height="88" rx="8" /><rect x="17" y="17" width="66" height="66" rx="4" /><path className="symbol-dashed" d="M24 35H76M24 50H76M24 65H76" /></>}
+      {type === "pet-play" && <><rect x="7" y="7" width="86" height="86" rx="5" /><circle cx="50" cy="50" r="22" /><path d="M37 50H63M50 37V63" /></>}
       {type === "chair" && <><rect className="chair-backrest" x="16" y="5" width="68" height="14" rx="5" /><rect x="19" y="25" width="62" height="56" rx="12" /><path d="M12 27V67M88 27V67M12 27H19M81 27H88M50 81V94M29 94H71" /></>}
     </svg>
   )
@@ -747,6 +781,7 @@ function ThreeDBox({ item }: { item: FurnitureModule }) {
       <ModelBlock x={47} y={39} width={6} depth={6} z={26} height={10} />
       <ModelBlock x={28} y={20} width={44} depth={44} z={36} height={8} className="model-lampshade" />
     </>}
+    {item.id.startsWith("pet-") && <ModelBlock height={item.height} className={`model-pet ${item.id}`}><FurnitureSymbol type={item.id} />{label}</ModelBlock>}
     {item.id === "basket" && <ModelBlock height={14} className="model-basket" front={<FurnitureSymbol type="basket" />}><FurnitureSymbol type="basket" />{label}</ModelBlock>}
   </div>
 }
@@ -756,20 +791,20 @@ function FloorPlan({
   selectedOption,
   viewMode,
   onViewModeChange,
+  furniture,
+  onMove,
+  scenario,
 }: {
   state: WorkspaceState
   selectedOption: number
   viewMode: "2d" | "3d"
   onViewModeChange: (mode: "2d" | "3d") => void
+  furniture: FurnitureModule[]
+  onMove: (id: string, placement: FurniturePlacement) => void
+  scenario: Scenario
 }) {
   const [orbit, setOrbit] = useState({ pitch: 57, yaw: -36 })
   const orbitDrag = useRef<{ x: number; y: number; pitch: number; yaw: number } | null>(null)
-  const layoutKey = state === "preview" || state === "applied" ? `option-${selectedOption}` : state === "decision" ? "decision" : "base"
-  const [manualLayouts, setManualLayouts] = useState<Record<string, Record<string, FurniturePlacement>>>({})
-  const furniture = furnitureLayout(layoutKey).map((item) => ({ ...item, ...manualLayouts[layoutKey]?.[item.id] }))
-  const moveFurniture = (id: string, placement: FurniturePlacement) => {
-    setManualLayouts((previous) => ({ ...previous, [layoutKey]: { ...previous[layoutKey], [id]: placement } }))
-  }
   return (
     <main className="floor-area">
       <div className="floor-toolbar">
@@ -821,9 +856,9 @@ function FloorPlan({
             <svg className="plan-light" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M38 0H66L100 53V78L38 16Z" /><path d="M0 45L30 75H0Z" /></svg>
             <div className="room-window"><i /><i /></div>
             <div className="room-door"><svg viewBox="0 0 100 100" aria-hidden="true"><path d="M2 98V2M2 2A96 96 0 0 1 98 98" /></svg></div>
-            {furniture.map((item) => <Furniture2D key={item.id} item={item} onMove={moveFurniture} />)}
-            {state === "decision" && <div className="corridor-zone" />}
-          {state === "decision" && <div className="conflict"><i>!</i><span>Attempt 01<b>通道过窄</b></span></div>}
+            {furniture.map((item) => <Furniture2D key={item.id} item={item} onMove={onMove} />)}
+            {state === "decision" && scenario === "office" && <div className="corridor-zone" />}
+          {state === "decision" && scenario === "office" && <div className="conflict"><i>!</i><span>Attempt 01<b>通道过窄</b></span></div>}
           </div>
           <div className="plan-legend"><span className="legend-furniture" />家具 <span className="legend-window" />窗户 <span className="legend-door" />门</div>
         </div>
@@ -837,6 +872,12 @@ const options = [
   ["Work First", "工作舒适优先", "办公舒适", "收纳充足", "专注不受扰"],
   ["Flex Space", "空间灵活优先", "空间更清", "一室多用", "日常要开阔"],
   ["Minimal Change", "最小改动优先", "保留现有家具", "成本最低", "快速可实施"],
+]
+
+const petOptions = [
+  ["Shared Living", "分区共处", "食水与清洁分开", "保留办公区", "安静休息"],
+  ["Play Space", "活动优先", "模块沿边排布", "释放中央空间", "活动更自由"],
+  ["Essential Kit", "最小改动", "三件基础模块", "后续逐步添置", "保留原有家具"],
 ]
 
 const comparisonMetrics = [
@@ -853,6 +894,12 @@ function AgentPanel({
   onSelect,
   onBack,
   onApply,
+  scenario,
+  petKind,
+  onPetKindChange,
+  onStartPet,
+  officeDecision,
+  furniture,
 }: {
   state: WorkspaceState
   selectedOption: number
@@ -861,8 +908,15 @@ function AgentPanel({
   onSelect: (index: number) => void
   onBack: () => void
   onApply: () => void
+  scenario: Scenario
+  petKind: PetKind
+  onPetKindChange: (kind: PetKind) => void
+  onStartPet: () => void
+  officeDecision: string
+  furniture: FurnitureModule[]
 }) {
-  const selected = options[selectedOption]
+  const currentOptions = scenario === "pet" ? petOptions : options
+  const selected = currentOptions[selectedOption]
   const [draft, setDraft] = useState("")
   const conversationRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -884,6 +938,7 @@ function AgentPanel({
           <div><p>告诉我你的生活变化或空间需求。我会分析空间、尝试布局，并在需要你判断时暂停。</p></div>
         </div>
 
+        {scenario === "pet" && <div className="chat-message ai"><div className="scenario-history"><small>已完成 · 长期居家办公</small><b>{officeDecision || "保留现有办公区"}</b><p>在已确认的布局上继续规划下个月的养宠生活。</p></div></div>}
         {latestRequest && <div className="chat-message user"><div><p>{latestRequest}</p></div><i>U</i></div>}
 
         {state !== "idle" && (
@@ -891,9 +946,12 @@ function AgentPanel({
             <div className="chat-message ai">
               
               <div>
-                <b>已完成空间分析</b>
-                <p>我检查了墙面、窗户、门的开合和主要通道，并自主尝试了三种布局策略。</p>
-                <ul><li>固定家具保持贴墙</li><li>主通道优先保持 80 cm 以上</li><li>书桌避开门洞与窗户开口</li></ul>
+                <b>{scenario === "pet" ? "为下个月的养宠生活预留空间" : "已完成空间分析"}</b>
+                {scenario === "pet" ? <>
+                  <p>保留已确认的办公家具位置，新增食水、休息与清洁模块；清洁区和食水区分开，中央通道优先留空。</p>
+                  <div className="pet-kind-switch" role="group" aria-label="宠物类型">{(["cat", "dog"] as const).map(kind => <button key={kind} aria-pressed={petKind === kind} onClick={() => onPetKindChange(kind)}>{kind === "cat" ? "计划养猫" : "计划养狗"}</button>)}</div>
+                  <small className="pet-note">小型宠物示意布局 · 可切换类型后再预览</small>
+                </> : <><p>我检查了墙面、窗户、门的开合和主要通道，并自主尝试了三种布局策略。</p><ul><li>固定家具保持贴墙</li><li>主通道优先保持 80 cm 以上</li><li>书桌避开门洞与窗户开口</li></ul></>}
               </div>
             </div>
             <div className="chat-message ai">
@@ -902,7 +960,7 @@ function AgentPanel({
                 <b>需要你的决策</b>
                 <p>点击任一方案会立即在中间平面图中预览，但不会直接应用。</p>
                 <div className="chat-options">
-                  {options.map((option, index) => (
+                  {currentOptions.map((option, index) => (
                     <button disabled={state === "applied"} className={index === selectedOption ? "active" : ""} key={option[0]} onClick={() => onSelect(index)}>
                       <span>{index + 1}</span><b>{option[0]}</b><small>{option[1]}</small>
                     </button>
@@ -920,12 +978,12 @@ function AgentPanel({
               <div className="preview-switcher-head">
                 <b>当前预览：{selected[0]}</b>
                 <span>
-                  <button disabled={state === "applied"} onClick={() => onSelect((selectedOption + options.length - 1) % options.length)} aria-label="上一个方案">‹</button>
-                  {selectedOption + 1} / {options.length}
-                  <button disabled={state === "applied"} onClick={() => onSelect((selectedOption + 1) % options.length)} aria-label="下一个方案">›</button>
+                  <button disabled={state === "applied"} onClick={() => onSelect((selectedOption + currentOptions.length - 1) % currentOptions.length)} aria-label="上一个方案">‹</button>
+                  {selectedOption + 1} / {currentOptions.length}
+                  <button disabled={state === "applied"} onClick={() => onSelect((selectedOption + 1) % currentOptions.length)} aria-label="下一个方案">›</button>
                 </span>
               </div>
-              <div className="metric-charts">
+              {scenario === "pet" ? <div className="pet-module-list"><b>新增养宠模块</b>{furniture.filter(item => item.id.startsWith("pet-")).map(item => <div key={item.id}><span>{item.label}</span><small>{Math.round(item.width * 4)} × {Math.round(item.depth * 3)} cm</small></div>)}<p>{selectedOption === 2 ? "先配置休息、食水和清洁三个基础区域。" : "增加独立活动模块，让办公与养宠各有位置。"}</p>{furniture.filter(item => item.id.startsWith("pet-")).length < (selectedOption === 2 ? 3 : 4) && <p role="status">当前空闲位置不足，部分模块暂未加入。可先移动现有家具，再重新生成养宠方案。</p>}<small>尺寸与位置为示意，可拖动微调后确认。</small></div> : <div className="metric-charts">
                 {comparisonMetrics.map((metric) => (
                   <section className="metric-chart" key={metric.label}>
                     <b>{metric.label}</b>
@@ -939,6 +997,7 @@ function AgentPanel({
                   </section>
                 ))}
               </div>
+              }
               {state === "preview" && (
                 <div className="chat-preview-actions">
                   <button className="primary" onClick={onApply}>应用此方案</button>
@@ -952,7 +1011,7 @@ function AgentPanel({
         {state === "applied" && (
           <>
             <div className="chat-message user compact"><div><p>应用方案：{selected[0]}</p></div><i>U</i></div>
-            <div className="chat-message ai"><div><b>方案已应用</b><p>已按“{selected[1]}”完成排布。中间的家具仍可拖拽微调，你也可以继续输入新需求。</p></div></div>
+            <div className="chat-message ai"><div><b>方案已应用</b><p>已按“{selected[1]}”完成排布。中间的家具仍可拖拽微调，你也可以继续输入新需求。</p>{scenario === "office" && <button className="next-scenario" onClick={onStartPet}><small>下一个生活场景</small><b>下个月打算养宠物 <span>↗</span></b></button>}</div></div>
           </>
         )}
       </div>
@@ -987,6 +1046,26 @@ function Workspace() {
   const [selectedOption, setSelectedOption] = useState(0)
   const [latestRequest, setLatestRequest] = useState("")
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d")
+  const [scenario, setScenario] = useState<Scenario>("office")
+  const [petKind, setPetKind] = useState<PetKind>("cat")
+  const [officeBase, setOfficeBase] = useState<FurnitureModule[]>([])
+  const [officeDecision, setOfficeDecision] = useState("")
+  const [layoutEdits, setLayoutEdits] = useState<Record<string, Record<string, FurniturePlacement>>>({})
+  const layout = state === "preview" || state === "applied" ? `option-${selectedOption}` : state === "decision" ? "decision" : "base"
+  const layoutKey = `${scenario}-${scenario === "pet" ? petKind : ""}-${layout}`
+  const base = scenario === "pet" ? petLayout(officeBase, petKind, selectedOption) : furnitureLayout(layout)
+  const furniture = base.map(item => ({ ...item, ...layoutEdits[layoutKey]?.[item.id] }))
+  const explore = (request: string) => {
+    if (/宠物|养猫|养狗|养宠|猫咪|狗狗/.test(request)) {
+      if (scenario === "office") setOfficeBase(furniture)
+      setScenario("pet")
+      if (/狗/.test(request)) setPetKind("dog")
+      else if (/猫/.test(request)) setPetKind("cat")
+    }
+    setLatestRequest(request)
+    setSelectedOption(0)
+    setState("decision")
+  }
   const [panelWidth, setPanelWidth] = useState(360)
   const resize = useRef<{ x: number; width: number } | null>(null)
 
@@ -1009,18 +1088,20 @@ function Workspace() {
     <div className="app-shell" style={{ "--panel-width": `${panelWidth}px` } as React.CSSProperties}>
       <BrandHeader status={status} />
       <div className="app-columns">
-        <MemoryPanel state={state} />
-        <FloorPlan state={state} selectedOption={selectedOption} viewMode={viewMode} onViewModeChange={setViewMode} />
+        <MemoryPanel state={state} scenario={scenario} officeDecision={officeDecision} />
+        <FloorPlan state={state} selectedOption={selectedOption} viewMode={viewMode} onViewModeChange={setViewMode} scenario={scenario} furniture={furniture} onMove={(id, placement) => setLayoutEdits(previous => ({ ...previous, [layoutKey]: { ...previous[layoutKey], [id]: placement } }))} />
         <div className="resize-handle" onPointerDown={(event) => { resize.current = { x: event.clientX, width: panelWidth } }} />
         <AgentPanel
           state={state}
           selectedOption={selectedOption}
           latestRequest={latestRequest}
-          onExplore={(request) => {
-            setLatestRequest(request)
-            setSelectedOption(0)
-            setState("decision")
-          }}
+          onExplore={explore}
+          scenario={scenario}
+          petKind={petKind}
+          officeDecision={officeDecision}
+          furniture={furniture}
+          onPetKindChange={kind => { setPetKind(kind); setState("decision") }}
+          onStartPet={() => explore("下个月打算养宠物") }
           onSelect={(index) => {
             setSelectedOption(index)
             if (state === "decision") {
@@ -1028,7 +1109,7 @@ function Workspace() {
             }
           }}
           onBack={() => setState("decision")}
-          onApply={() => setState("applied")}
+          onApply={() => { if (scenario === "office") setOfficeDecision(options[selectedOption][1]); setState("applied") }}
         />
       </div>
     </div>
