@@ -953,3 +953,39 @@ button { color: inherit; }
 .measure { font-size: 10px; letter-spacing: 1px; color: #777; }
 .measure-y::before, .measure-y::after, .measure-x::before, .measure-x::after { background: #aaa; }
 .plan-light { fill: rgba(0,0,0,.025); }
+
+/* Furniture-specific white models, using the same footprints as the plan. */
+.object-3d { background: transparent; }
+.model-block { position: absolute; transform-style: preserve-3d; }
+.model-face { position: absolute; border: 1px solid #00000013; backface-visibility: visible; }
+.model-top { inset: 0; background: #fafafa; transform: translateZ(var(--part-height)); }
+.model-front { left: 0; top: 100%; width: 100%; height: var(--part-height); background: #d5d5d5; transform-origin: top; transform: rotateX(90deg); }
+.model-back { left: 0; bottom: 100%; width: 100%; height: var(--part-height); background: #e0e0e0; transform-origin: bottom; transform: rotateX(-90deg); }
+.model-left { right: 100%; top: 0; width: var(--part-height); height: 100%; background: #e6e6e6; transform-origin: right; transform: rotateY(90deg); }
+.model-right { left: 100%; top: 0; width: var(--part-height); height: 100%; background: #c8c8c8; transform-origin: left; transform: rotateY(-90deg); }
+.model-label { position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%); white-space: nowrap; color: #777; font-size: 9px; z-index: 2; background: #ffffffa0; padding: 1px 3px; }
+.model-top > .plan-symbol { stroke: #b0b0b0; }
+.mattress .model-top { border-radius: 3px; background: #f5f5f5; }
+.model-duvet { position: absolute; inset: 32% 4% 4%; border: 1px solid #ddd; border-top: 3px double #ddd; background: #fafafa; }
+.model-pillow .model-top { border-radius: 4px; background: #fff; }
+.bed-frame .model-top, .bed-headboard .model-top { background: #e7e7e7; }
+.model-leg .model-top, .model-leg .model-front, .model-leg .model-right { background: #bcbcbc; }
+.model-monitor .model-front { background: #a0a0a0; border: 3px solid #d0d0d0; }
+.model-keyboard .model-top { background: repeating-linear-gradient(0deg,#ddd 0 1px,#eee 1px 3px); border-color: #ccc; }
+.model-mouse .model-top, .model-seat .model-top, .model-backrest .model-top { border-radius: 4px; background: #ededed; }
+.model-cabinet-doors, .model-drawers { position: absolute; inset: 0; display: flex; background: #e5e5e5; }
+.model-cabinet-doors > span { flex: 1; border: 1px solid #c0c0c0; position: relative; }
+.model-cabinet-doors > span::after { content: ""; position: absolute; right: 12%; top: 43%; height: 13%; width: 2px; background: #999; }
+.model-cabinet-doors > span:last-child::after { right: auto; left: 12%; }
+.model-drawers { flex-direction: column; }
+.model-drawers > span { flex: 1; border-bottom: 1px solid #bcbcbc; position: relative; }
+.model-drawers > span::after { content: ""; position: absolute; top: 40%; left: 35%; width: 30%; height: 1px; background: #999; }
+.model-shelves { position: absolute; inset: 3px; display: flex; flex-direction: column; background: #bcbcbc; border: 2px solid #e5e5e5; }
+.model-shelves > span { flex: 1; border-bottom: 3px solid #ededed; display: flex; gap: 2px; align-items: end; padding: 2px 3px 0; }
+.model-shelves i { display: block; width: 3px; height: 75%; background: #e2e2e2; border-left: 1px solid #aaa; }
+.model-shelves i:nth-child(2) { height: 90%; background: #f0f0f0; }
+.model-shelves i:last-child { transform: rotate(-12deg); height: 65%; }
+.model-lamp-base .model-top, .model-lampshade .model-top { border-radius: 50%; background: #fff; }
+.model-basket .model-top { border-radius: 3px; background: #ececec; }
+.model-basket .model-front { background: #dfdfdf; }
+.model-basket .model-label { font-size: 8px; }
