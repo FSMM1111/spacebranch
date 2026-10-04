@@ -719,6 +719,111 @@ function canAnimateLayout(before: FurnitureModule[], after: FurnitureModule[]): 
   return true
 }
 
+type LayoutMotionStep = { furniture: FurnitureModule[]; duration: number }
+
+function modulePath(start: FurnitureModule, goal: FurnitureModule, obstacles: FurnitureModule[]): FurnitureModule[] | null {
+  if (obstacles.some(item => overlaps(goal, item))) return null
+  const coordinates = (axis: "x" | "y", size: number) => Array.from(new Set([
+    0, 100 - size, start[axis], goal[axis],
+    ...obstacles.flatMap(item => [item[axis] - size, item[axis] + (axis === "x" ? item.width : item.depth)]),
+  ].filter(value => value >= 0 && value <= 100 - size))).sort((a, b) => a - b)
+  const xs = coordinates("x", start.width), ys = coordinates("y", start.depth)
+  const key = (x: number, y: number) => y * xs.length + x
+  const startKey = key(xs.indexOf(start.x), ys.indexOf(start.y)), goalKey = key(xs.indexOf(goal.x), ys.indexOf(goal.y))
+  const costs = new Map<number, number>([[startKey, 0]]), previous = new Map<number, number>(), open = new Set([startKey])
+  const placement = (node: number) => ({ ...start, x: xs[node % xs.length], y: ys[Math.floor(node / xs.length)] })
+  while (open.size) {
+    let node = -1, best = Infinity
+    for (const candidate of open) {
+      const point = placement(candidate), score = costs.get(candidate)! + Math.abs(point.x - goal.x) + Math.abs(point.y - goal.y)
+      if (score < best) { node = candidate; best = score }
+    }
+    if (node === goalKey) {
+      const path = [placement(node)]
+      while (previous.has(node)) { node = previous.get(node)!; path.unshift(placement(node)) }
+      return path.filter((point, i) => i === 0 || i === path.length - 1 || !((path[i - 1].x === point.x && point.x === path[i + 1].x) || (path[i - 1].y === point.y && point.y === path[i + 1].y)))
+    }
+    open.delete(node)
+    const x = node % xs.length, y = Math.floor(node / xs.length), from = placement(node)
+    for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]) {
+      if (nx < 0 || nx >= xs.length || ny < 0 || ny >= ys.length) continue
+      const next = key(nx, ny), to = placement(next)
+      const swept = { x: Math.min(from.x, to.x), y: Math.min(from.y, to.y), width: start.width + Math.abs(from.x - to.x), depth: start.depth + Math.abs(from.y - to.y) }
+      if (obstacles.some(item => overlaps(swept, item))) continue
+      const cost = costs.get(node)! + Math.abs(from.x - to.x) + Math.abs(from.y - to.y)
+      if (cost >= (costs.get(next) ?? Infinity)) continue
+      costs.set(next, cost); previous.set(next, node); open.add(next)
+    }
+  }
+  return null
+}
+
+function planLayoutMotion(before: FurnitureModule[], after: FurnitureModule[]): LayoutMotionStep[] {
+  if (canAnimateLayout(before, after)) return [{ furniture: after, duration: 800 }]
+  let working = before.filter(item => after.some(target => target.id === item.id))
+  const steps: LayoutMotionStep[] = []
+  const different = (a: FurnitureModule, b: FurnitureModule) => a.x !== b.x || a.y !== b.y || a.width !== b.width || a.depth !== b.depth
+  const pending = new Map(after.filter(item => working.some(previous => previous.id === item.id && different(previous, item))).map(item => [item.id, item]))
+  const push = (item: FurnitureModule, duration: number) => {
+    working = working.map(previous => previous.id === item.id ? item : previous)
+    steps.push({ furniture: working, duration })
+  }
+  const move = (current: FurnitureModule, target: FurnitureModule): boolean => {
+    const obstacles = working.filter(item => item.id !== current.id)
+    if (obstacles.some(item => overlaps(target, item))) return false
+    const small = { ...current, width: Math.min(current.width, target.width), depth: Math.min(current.depth, target.depth) }
+    const path = modulePath(small, { ...small, x: target.x, y: target.y }, obstacles)
+    if (!path) return false
+    if (different(current, small)) push(small, 120)
+    for (let i = 1; i < path.length; i++) {
+      const distance = Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y)
+      push(path[i], Math.max(110, Math.min(360, distance * 7)))
+    }
+    if (different(path[path.length - 1], target)) push(target, 140)
+    return true
+  }
+  for (let attempt = 0; pending.size && attempt < after.length * 4; attempt++) {
+    let advanced = false
+    for (const [id, target] of pending) {
+      if (move(working.find(item => item.id === id)!, target)) { pending.delete(id); advanced = true }
+    }
+    if (advanced) continue
+    // Resolve mutual blocking by temporarily parking a moving module in free space.
+    let parked = false
+    const movableIds = after.filter(target => before.some(original => original.id === target.id && different(original, target))).map(item => item.id)
+    const parkingOrder = [...movableIds.filter(id => !pending.has(id)), ...pending.keys()]
+    for (const id of parkingOrder) {
+      const item = working.find(current => current.id === id)!
+      const reserved = [...working.filter(other => other.id !== id), ...after.filter(other => other.id !== id)]
+      const candidates: FurnitureModule[] = []
+      for (let y = 0; y <= 100 - item.depth; y += 2) for (let x = 0; x <= 100 - item.width; x += 2) {
+        const candidate = { ...item, x, y }
+        if (Math.hypot(x - item.x, y - item.y) >= 2 && !reserved.some(other => overlaps(candidate, other))) candidates.push(candidate)
+      }
+      candidates.sort((a, b) => (Math.hypot(a.x - 34, a.y - 40) + .1 * Math.hypot(a.x - item.x, a.y - item.y)) - (Math.hypot(b.x - 34, b.y - 40) + .1 * Math.hypot(b.x - item.x, b.y - item.y)))
+      for (const candidate of candidates) {
+        const parkedLayout = working.map(other => other.id === id ? candidate : other)
+        const unblocks = Array.from(pending.values()).some(target => {
+          if (target.id === id) return false
+          const current = parkedLayout.find(other => other.id === target.id)!
+          const obstacles = parkedLayout.filter(other => other.id !== target.id)
+          if (obstacles.some(other => overlaps(target, other))) return false
+          const small = { ...current, width: Math.min(current.width, target.width), depth: Math.min(current.depth, target.depth) }
+          return modulePath(small, { ...small, x: target.x, y: target.y }, obstacles) !== null
+        })
+        if (unblocks && move(item, candidate)) { pending.set(id, after.find(target => target.id === id)!); parked = true; break }
+      }
+      if (parked) break
+    }
+    if (!parked) break
+  }
+  // A fully packed manually edited room may have no traversable route.
+  // Its validated target remains usable; ordinary proposals take collision-free routes.
+  if (pending.size) return [{ furniture: after, duration: 0 }]
+  steps.push({ furniture: after, duration: 0 })
+  return steps
+}
+
 function furnitureLayout(layout: string): FurnitureModule[] {
   const modules: FurnitureModule[] = [
     { id: "wardrobe", label: "衣柜", x: 0, y: 0, width: 22, depth: 38, height: 92 },
@@ -907,6 +1012,7 @@ function FloorPlan({
   furniture,
   onMove,
   scenario,
+  motionKey,
 }: {
   state: WorkspaceState
   selectedOption: number
@@ -915,14 +1021,45 @@ function FloorPlan({
   furniture: FurnitureModule[]
   onMove: (id: string, placement: FurniturePlacement) => void
   scenario: Scenario
+  motionKey: string
 }) {
   const [orbit, setOrbit] = useState({ pitch: 57, yaw: -36 })
   const orbitDrag = useRef<{ x: number; y: number; pitch: number; yaw: number } | null>(null)
-  const previousFurniture = useRef(furniture)
-  const motionSafe = canAnimateLayout(previousFurniture.current, furniture)
-  useEffect(() => { previousFurniture.current = furniture }, [furniture])
+  const [displayedFurniture, setDisplayedFurniture] = useState(furniture)
+  const [layoutMoving, setLayoutMoving] = useState(false)
+  const displayedRef = useRef(furniture)
+  const lastMotionKey = useRef(motionKey)
+  useEffect(() => {
+    const update = (items: FurnitureModule[]) => { displayedRef.current = items; setDisplayedFurniture(items) }
+    if (lastMotionKey.current === motionKey || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      lastMotionKey.current = motionKey
+      update(furniture)
+      setLayoutMoving(false)
+      return
+    }
+    lastMotionKey.current = motionKey
+    const steps = planLayoutMotion(displayedRef.current, furniture)
+    let frame = 0, stepIndex = 0, started: number | null = null, origin = displayedRef.current
+    setLayoutMoving(true)
+    const tick = (now: number) => {
+      const step = steps[stepIndex]
+      if (!step) { update(furniture); setLayoutMoving(false); return }
+      if (started === null) started = now
+      const progress = step.duration ? Math.min(1, (now - started) / step.duration) : 1
+      const eased = progress * progress * (3 - 2 * progress)
+      const previous = new Map(origin.map(item => [item.id, item]))
+      update(step.furniture.map(item => {
+        const from = previous.get(item.id) || item
+        return { ...item, x: from.x + (item.x - from.x) * eased, y: from.y + (item.y - from.y) * eased, width: from.width + (item.width - from.width) * eased, depth: from.depth + (item.depth - from.depth) * eased }
+      }))
+      if (progress === 1) { origin = step.furniture; started = null; stepIndex++ }
+      frame = requestAnimationFrame(tick)
+    }
+    frame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frame)
+  }, [furniture, motionKey])
   return (
-    <main className="floor-area" data-motion-safe={motionSafe}>
+    <main className="floor-area" data-motion-safe={false} data-layout-moving={layoutMoving}>
       <div className="floor-toolbar">
         <div><h1>空间布局</h1><p>卧室 · 12 ㎡ · {viewMode === "2d" ? "平面视图" : "白模视图"}</p></div>
         <div className="tools">
@@ -958,7 +1095,7 @@ function FloorPlan({
               <div className="wall-3d wall-3d-back"><span>窗户</span></div>
               <div className="wall-3d wall-3d-side" />
               <div className="floor-3d-grid" />
-              {furniture.map((item) => <ThreeDBox key={item.id} item={item} />)}
+              {displayedFurniture.map((item) => <ThreeDBox key={item.id} item={item} />)}
             </div>
             <div className="view-3d-hint">按住并拖动旋转视角 · 拖动家具请切回 2D 图</div>
           </div>
@@ -972,7 +1109,7 @@ function FloorPlan({
             <svg className="plan-light" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M38 0H66L100 53V78L38 16Z" /><path d="M0 45L30 75H0Z" /></svg>
             <div className="room-window"><i /><i /></div>
             <div className="room-door"><svg viewBox="0 0 100 100" aria-hidden="true"><path d="M2 98V2M2 2A96 96 0 0 1 98 98" /></svg></div>
-            {furniture.map((item) => <Furniture2D key={item.id} item={item} onMove={onMove} />)}
+            {displayedFurniture.map((item) => <Furniture2D key={item.id} item={item} onMove={onMove} />)}
             {state === "decision" && scenario === "office" && <div className="corridor-zone" />}
           {state === "decision" && scenario === "office" && <div className="conflict"><i>!</i><span>Attempt 01<b>通道过窄</b></span></div>}
           </div>
@@ -1170,7 +1307,7 @@ function Workspace() {
   const layout = state === "preview" || state === "applied" ? `option-${selectedOption}` : state === "decision" ? "decision" : "base"
   const layoutKey = `${scenario}-${scenario === "pet" ? petKind : ""}-${layout}`
   const base = useMemo(() => scenario === "pet" ? petLayout(officeBase, petKind, selectedOption) : furnitureLayout(layout), [scenario, officeBase, petKind, selectedOption, layout])
-  const furniture = base.map(item => ({ ...item, ...layoutEdits[layoutKey]?.[item.id] }))
+  const furniture = useMemo(() => base.map(item => ({ ...item, ...layoutEdits[layoutKey]?.[item.id] })), [base, layoutEdits, layoutKey])
   const explore = (request: string) => {
     if (/宠物|养猫|养狗|养宠|猫咪|狗狗/.test(request)) {
       if (scenario === "office") setOfficeBase(furniture)
@@ -1205,7 +1342,7 @@ function Workspace() {
       <BrandHeader status={status} />
       <div className="app-columns">
         <MemoryPanel state={state} scenario={scenario} officeDecision={officeDecision} />
-        <FloorPlan state={state} selectedOption={selectedOption} viewMode={viewMode} onViewModeChange={setViewMode} scenario={scenario} furniture={furniture} onMove={(id, placement) => setLayoutEdits(previous => {
+        <FloorPlan state={state} selectedOption={selectedOption} viewMode={viewMode} onViewModeChange={setViewMode} scenario={scenario} motionKey={layoutKey} furniture={furniture} onMove={(id, placement) => setLayoutEdits(previous => {
           const current = base.map(item => ({ ...item, ...previous[layoutKey]?.[item.id] }))
           const moving = current.find(item => item.id === id)
           if (!moving) return previous

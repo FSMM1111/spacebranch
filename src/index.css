@@ -1094,3 +1094,4 @@ button:focus-visible { outline: 2px solid #555; outline-offset: 3px; }
 .night-module { left: 53%; right: auto; top: 0; }
 .floor-area[data-motion-safe="false"] .drag-item,
 .floor-area[data-motion-safe="false"] .object-3d { transition: none; }
+.floor-area[data-layout-moving="true"] .drag-item { pointer-events: none; }
