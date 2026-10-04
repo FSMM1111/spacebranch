@@ -855,11 +855,11 @@ button { color: inherit; }
 .floor-toolbar { height: 104px; flex: none; padding: 0 28px; background: #fafafa; border-bottom: 1px solid #dedede; }
 .floor-toolbar h1 { font-size: 22px; font-weight: 600; letter-spacing: -.5px; }
 .floor-toolbar p { margin-top: 7px; font-size: 12px; color: #858585; }
-.tools { gap: 12px; }
+.tools { gap: 24px; }
 .view-switch { border-color: #dedede; background: #eeeeee; border-radius: 7px; padding: 3px; }
 .tools .view-switch button { height: 30px; border-radius: 5px; padding: 0 12px; color: #777; font-size: 12px; }
 .tools .view-switch button.active { color: #222; background: #fff; box-shadow: 0 1px 3px #00000012; }
-.tools .viewport-label { padding: 0; border: 0; color: #999; font: 10px monospace; letter-spacing: 1px; }
+.tools .viewport-label { flex: 0 0 96px; width: 96px; padding: 0; border: 0; color: #999; font: 10px monospace; letter-spacing: 1px; white-space: nowrap; }
 .floor-stage { padding: 20px 3%; }
 .plan-wrap { width: min(90%, 920px); padding: 34px 38px 48px 54px; }
 :is(.floor-area, .simple-space-preview) .room-plan { border: 10px solid #555; background: #fafafa; box-shadow: 0 8px 20px #00000008; }
