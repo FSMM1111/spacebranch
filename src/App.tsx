@@ -865,10 +865,12 @@ function Furniture2D({ item, onMove }: { item: FurnitureModule; onMove: (id: str
   )
 }
 
+const MODEL_HEIGHT_SCALE = 2
+
 function ModelBlock({ x = 0, y = 0, width = 100, depth = 100, height, z = 0, className = "", children, front, right }: {
   x?: number; y?: number; width?: number; depth?: number; height: number; z?: number; className?: string; children?: React.ReactNode; front?: React.ReactNode; right?: React.ReactNode
 }) {
-  return <div className={`model-block ${className}`} style={{ left: `${x}%`, top: `${y}%`, width: `${width}%`, height: `${depth}%`, transform: `translateZ(${z}px)`, "--part-height": `${height}px` } as React.CSSProperties}>
+  return <div className={`model-block ${className}`} style={{ left: `${x}%`, top: `${y}%`, width: `${width}%`, height: `${depth}%`, transform: `translateZ(${z * MODEL_HEIGHT_SCALE}px)`, "--part-height": `${height * MODEL_HEIGHT_SCALE}px` } as React.CSSProperties}>
     <div className="model-face model-top">{children}</div>
     <div className="model-face model-front">{front}</div>
     <div className="model-face model-back" />

@@ -897,9 +897,9 @@ button { color: inherit; }
 .space-3d-stage { background: transparent; }
 .room-3d { border: 4px solid #c2c2c2; background: #f7f7f7; box-shadow: 22px 30px 35px #00000012; }
 .wall-3d { background: linear-gradient(#f8f8f8,#e1e1e1); }
-.wall-3d-back { left: -4px; right: -4px; top: -4px; height: 90px; border-color: #d0d0d0; }
-.wall-3d-side { left: -4px; top: -4px; bottom: -4px; width: 85px; border-color: #d0d0d0; }
-.wall-3d-back span { border: 2px solid #aaa; color: #999; background: #f4f4f4; font-size: 10px; }
+.wall-3d-back { left: -4px; right: -4px; top: -4px; height: 180px; border-color: #d0d0d0; }
+.wall-3d-side { left: -4px; top: -4px; bottom: -4px; width: 170px; border-color: #d0d0d0; }
+.wall-3d-back span { bottom: 40px; height: 76px; border: 2px solid #aaa; color: #999; background: #f4f4f4; font-size: 10px; }
 .object-3d { --box-top: #f9f9f9; --box-front: #d8d8d8; --box-side: #c3c3c3; color: #777; font-size: 10px; }
 .box-face { border-color: #00000014; }
 .box-top { border-radius: 2px; box-shadow: 0 0 0 1px #ffffff55 inset; }
