@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 
 type Screen = "onboard" | "brief" | "workspace"
-type Scenario = "office" | "pet"
+type Scenario = "office" | "pet" | "desk"
 type PetKind = "cat" | "dog"
 type WorkspaceState = "idle" | "decision" | "preview" | "applied"
 type BriefInput = { text: string; photos: number; videos: number; references: number }
@@ -363,9 +363,9 @@ function MemoryPanel({ state, scenario, officeDecision }: { state: WorkspaceStat
         <button className={`active ${expandedSections.has("life") ? "expanded" : ""}`} onClick={() => expandSection("life")}>
           <span className="line-icon">♙</span>
           <div>
-            <b>当前生活状态</b><small className="memory-summary">{scenario === "pet" ? "居家办公 · 下个月养宠" : "长期居家办公"}</small>
+            <b>当前生活状态</b><small className="memory-summary">{scenario === "desk" ? "更换加宽 50% 的书桌" : scenario === "pet" ? "居家办公 · 下个月养宠" : "长期居家办公"}</small>
             <span className="memory-hover-detail">
-              <b>{scenario === "pet" ? "办公与宠物共处" : "卧室兼办公"}</b>
+              <b>{scenario === "desk" ? "大桌面 · 保留现有生活分区" : scenario === "pet" ? "办公与宠物共处" : "卧室兼办公"}</b>
               <small>每周 5 天 · 约 8h / 天</small>
               <em>共用 12㎡</em>
             </span>
@@ -384,10 +384,10 @@ function MemoryPanel({ state, scenario, officeDecision }: { state: WorkspaceStat
         <button className={expandedSections.has("decisions") ? "expanded" : ""} onClick={() => expandSection("decisions")}>
           <span className="line-icon">✓</span>
           <div>
-            <b>已确认决策</b><small className="memory-summary">{officeDecision ? `${officeDecision}${scenario === "pet" && state === "applied" ? " · 养宠布局" : ""}` : "暂未确认"}</small>
+            <b>已确认决策</b><small className="memory-summary">{officeDecision ? `${officeDecision}${state === "applied" ? scenario === "desk" ? " · 大书桌布局" : scenario === "pet" ? " · 养宠布局" : "" : ""}` : "暂未确认"}</small>
             <span className="memory-hover-detail">
               <b>{state === "applied" ? "已应用" : "等待选择"}</b>
-              <small>{officeDecision ? "保留已确认办公区 · 养宠家具独立排布" : "预览方案后确认"}</small>
+              <small>{scenario === "desk" ? "原书桌长边增加 50% · 家具与养宠模块一并保留" : officeDecision ? "保留已确认办公区 · 养宠家具独立排布" : "预览方案后确认"}</small>
             </span>
           </div><i>›</i>
         </button>
@@ -789,6 +789,56 @@ function petLayout(base: FurnitureModule[], kind: PetKind, option: number): Furn
   return occupied
 }
 
+// Compare wall placements for a desk whose long side grows by 50%.
+// Preserve every module; only relocate movable items when the new footprint needs it.
+function largerDeskLayout(base: FurnitureModule[]): { furniture: FurnitureModule[]; fits: boolean } {
+  const original = base.find(item => item.id === "desk")
+  const chair = base.find(item => item.id === "chair")
+  if (!original || !chair) return { furniture: base, fits: false }
+  const long = Math.max(original.width * 4, original.depth * 3) * 1.5
+  const short = Math.min(original.width * 4, original.depth * 3)
+  const fixed = base.filter(item => !["desk", "chair", "shelf", "basket"].includes(item.id) && !item.id.startsWith("pet-"))
+  const movable = base.filter(item => !fixed.includes(item) && item.id !== "desk" && item.id !== "chair")
+    .sort((a, b) => (a.id === "pet-food" ? 1 : 0) - (b.id === "pet-food" ? 1 : 0))
+  const inRoom = (item: FurnitureModule) => item.x >= 0 && item.y >= 0 && item.x + item.width <= 100 && item.y + item.depth <= 100
+  const entranceClear = (item: FurnitureModule) => !(item.x < 28 && item.y + item.depth > 78)
+  const aisleClear = (item: FurnitureModule) => !(item.x < 64 && item.x + item.width > 28 && item.y < 78 && item.y + item.depth > 38)
+  const edge = (item: FurnitureModule, occupied: FurnitureModule[]) => Math.min(item.x, item.y, 100 - item.x - item.width, 100 - item.y - item.depth) <= 1 || occupied.some(other =>
+    ((Math.abs(item.x - other.x - other.width) <= 1 || Math.abs(item.x + item.width - other.x) <= 1) && item.y < other.y + other.depth && item.y + item.depth > other.y) ||
+    ((Math.abs(item.y - other.y - other.depth) <= 1 || Math.abs(item.y + item.depth - other.y) <= 1) && item.x < other.x + other.width && item.x + item.width > other.x))
+  let best: FurnitureModule[] | null = null, bestScore = Infinity
+  for (const horizontal of [true, false]) {
+    const width = (horizontal ? long : short) / 4, depth = (horizontal ? short : long) / 3
+    if (width > 100 || depth > 100) continue
+    for (const wall of [0, 1]) for (let offset = 0; offset <= 100 - (horizontal ? width : depth); offset++) {
+      const desk = { ...original, width, depth, x: horizontal ? offset : wall ? 100 - width : 0, y: horizontal ? wall ? 100 - depth : 0 : offset }
+      const seat = { ...chair, x: horizontal ? desk.x + (width - chair.width) / 2 : wall ? desk.x - chair.width - 1 : width + 1, y: horizontal ? wall ? desk.y - chair.depth - 1 : depth + 1 : desk.y + (depth - chair.depth) / 2 }
+      if (![desk, seat].every(item => inRoom(item) && entranceClear(item) && !fixed.some(other => overlaps(item, other))) || overlaps(desk, seat)) continue
+      const occupied = [...fixed, desk, seat]
+      let score = Math.hypot(desk.x - original.x, desk.y - original.y) + Math.hypot(seat.x - chair.x, seat.y - chair.y)
+      let fits = true
+      for (const item of movable) {
+        const valid = (candidate: FurnitureModule) => inRoom(candidate) && entranceClear(candidate) && aisleClear(candidate) && !occupied.some(other => overlaps(candidate, other)) &&
+          (!candidate.id.startsWith("pet-") || edge(candidate, occupied)) &&
+          (candidate.id !== "pet-food" || !occupied.some(other => other.id === "pet-clean" && Math.hypot(candidate.x + candidate.width / 2 - other.x - other.width / 2, candidate.y + candidate.depth / 2 - other.y - other.depth / 2) < 30))
+        if (valid(item)) { occupied.push(item); continue }
+        let replacement: FurnitureModule | null = null, distance = Infinity
+        for (let y = 0; y <= 100 - item.depth; y++) for (let x = 0; x <= 100 - item.width; x++) {
+          const candidate = { ...item, x, y }, cost = Math.hypot(x - item.x, y - item.y)
+          if (cost < distance && valid(candidate)) { replacement = candidate; distance = cost }
+        }
+        if (!replacement) { fits = false; break }
+        score += 100 + distance * 2
+        occupied.push(replacement)
+      }
+      // Prefer a clear central aisle; chair access is a local work zone.
+      score += horizontal && wall === 0 ? 0 : 10
+      if (fits && score < bestScore) { bestScore = score; best = base.map(item => occupied.find(other => other.id === item.id) || item) }
+    }
+  }
+  return { furniture: best || base, fits: best !== null }
+}
+
 function placementStyle(item: FurniturePlacement): React.CSSProperties {
   return { left: `${item.x}%`, top: `${item.y}%`, right: "auto", bottom: "auto", width: `${item.width}%`, height: `${item.depth}%` }
 }
@@ -1037,6 +1087,8 @@ const petOptions = [
   ["Essential Kit", "最小改动", "三件基础模块", "后续逐步添置", "保留原有家具"],
 ]
 
+const deskOptions = [["Room Fit", "推荐布局 · 大桌面共处", "长边加宽 50%", "长边贴墙", "保留现有家具"]]
+
 const comparisonMetrics = [
   { label: "工作舒适度", values: [96, 78, 65], display: ["96", "78", "65"] },
   { label: "空间开阔度", values: [68, 94, 82], display: ["68", "94", "82"] },
@@ -1055,6 +1107,9 @@ function AgentPanel({
   petKind,
   onPetKindChange,
   onStartPet,
+  onStartDesk,
+  deskOriginal,
+  deskFits,
   officeDecision,
   furniture,
 }: {
@@ -1069,11 +1124,16 @@ function AgentPanel({
   petKind: PetKind
   onPetKindChange: (kind: PetKind) => void
   onStartPet: () => void
+  onStartDesk: () => void
+  deskOriginal?: FurnitureModule
+  deskFits: boolean
   officeDecision: string
   furniture: FurnitureModule[]
 }) {
-  const currentOptions = scenario === "pet" ? petOptions : options
+  const currentOptions = scenario === "desk" ? deskOptions : scenario === "pet" ? petOptions : options
   const selected = currentOptions[selectedOption]
+  const currentDesk = furniture.find(item => item.id === "desk")
+  const deskSize = (item?: FurnitureModule) => item ? [item.width * 4, item.depth * 3].sort((a, b) => b - a).map(value => Math.round(value * 10) / 10).join(" × ") + " cm" : "未识别书桌"
   const [draft, setDraft] = useState("")
   const conversationRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -1095,6 +1155,7 @@ function AgentPanel({
           <div><p>告诉我你的生活变化或空间需求。我会分析空间、尝试布局，并在需要你判断时暂停。</p></div>
         </div>
 
+        {scenario === "desk" && <div className="chat-message ai"><div className="scenario-history"><small>继续规划 · 已确认的空间布局</small><b>保留原有家具与养宠模块</b><p>在当前排布上更换大书桌，重新检查办公区、休息区和通道。</p></div></div>}
         {scenario === "pet" && <div className="chat-message ai"><div className="scenario-history"><small>已完成 · 长期居家办公</small><b>{officeDecision || "保留现有办公区"}</b><p>在已确认的布局上继续规划下个月的养宠生活。</p></div></div>}
         {latestRequest && <div className="chat-message user"><div><p>{latestRequest}</p></div><i>U</i></div>}
 
@@ -1103,8 +1164,8 @@ function AgentPanel({
             <div className="chat-message ai">
               
               <div>
-                <b>{scenario === "pet" ? "为下个月的养宠生活预留空间" : "已完成空间分析"}</b>
-                {scenario === "pet" ? <>
+                <b>{scenario === "desk" ? "为加宽 50% 的书桌规划空间" : scenario === "pet" ? "为下个月的养宠生活预留空间" : "已完成空间分析"}</b>
+                {scenario === "desk" ? <><p>将原书桌的长边增加 50%，深度和高度保持一致。优先让长边贴墙，保留床、床头柜和衣柜，并调整椅子及必要的收纳、养宠模块。</p><p>原书桌：{deskSize(deskOriginal)} → 新书桌：{deskSize(currentDesk)}</p>{!deskFits && <p role="status">当前空间无法容纳这张大书桌及全部家具。请先调整可移动家具，再重新规划。</p>}</> : scenario === "pet" ? <>
                   <p>提供家具重排、活动优先与最小改动三种策略。第一套会重新安排原有家具，第三套保留原布局；食水和清洁区分开，中央通道优先留空。</p>
                   <div className="pet-kind-switch" role="group" aria-label="宠物类型">{(["cat", "dog"] as const).map(kind => <button key={kind} aria-pressed={petKind === kind} onClick={() => onPetKindChange(kind)}>{kind === "cat" ? "计划养猫" : "计划养狗"}</button>)}</div>
                   <small className="pet-note">小型宠物示意布局 · 可切换类型后再预览</small>
@@ -1135,12 +1196,12 @@ function AgentPanel({
               <div className="preview-switcher-head">
                 <b>当前预览：{selected[0]}</b>
                 <span>
-                  <button disabled={state === "applied"} onClick={() => onSelect((selectedOption + currentOptions.length - 1) % currentOptions.length)} aria-label="上一个方案">‹</button>
+                  <button disabled={state === "applied" || currentOptions.length === 1} onClick={() => onSelect((selectedOption + currentOptions.length - 1) % currentOptions.length)} aria-label="上一个方案">‹</button>
                   {selectedOption + 1} / {currentOptions.length}
-                  <button disabled={state === "applied"} onClick={() => onSelect((selectedOption + 1) % currentOptions.length)} aria-label="下一个方案">›</button>
+                  <button disabled={state === "applied" || currentOptions.length === 1} onClick={() => onSelect((selectedOption + 1) % currentOptions.length)} aria-label="下一个方案">›</button>
                 </span>
               </div>
-              {scenario === "pet" ? <div className="pet-module-list"><b>新增养宠模块</b>{furniture.filter(item => item.id.startsWith("pet-")).map(item => <div key={item.id}><span>{item.label}</span><small>{Math.round(item.width * 4)} × {Math.round(item.depth * 3)} cm</small></div>)}<p>{selectedOption === 0 ? "重排书桌、椅子、书柜与置物筐，保留床、床头柜和衣柜位置；办公区集中到窗边，腾出连续活动空间。" : selectedOption === 2 ? "先配置休息、食水和清洁三个基础区域。" : "养宠模块沿墙或固定家具边缘排布，中央过道保持留空。"}</p>{furniture.filter(item => item.id.startsWith("pet-")).length < (petKind === "dog" && selectedOption !== 2 ? 4 : 3) && <p role="status">当前空闲位置不足，部分模块暂未加入。可先移动现有家具，再重新生成养宠方案。</p>}<small>尺寸与位置为示意，可拖动微调后确认。</small></div> : <div className="metric-charts">
+              {scenario === "desk" ? <div className="pet-module-list"><b>推荐布局说明</b><div><span>原书桌</span><small>{deskSize(deskOriginal)}</small></div><div><span>加宽后的书桌</span><small>{deskSize(currentDesk)}</small></div><p>大书桌长边贴墙，椅子留在桌前；优先保留现有家具位置，必要时沿边移动收纳或宠物模块，为中央通道留空。</p><p>更换书桌即可，其他模块继续使用；可在中间视图拖动微调。</p></div> : scenario === "pet" ? <div className="pet-module-list"><b>新增养宠模块</b>{furniture.filter(item => item.id.startsWith("pet-")).map(item => <div key={item.id}><span>{item.label}</span><small>{Math.round(item.width * 4)} × {Math.round(item.depth * 3)} cm</small></div>)}<p>{selectedOption === 0 ? "重排书桌、椅子、书柜与置物筐，保留床、床头柜和衣柜位置；办公区集中到窗边，腾出连续活动空间。" : selectedOption === 2 ? "先配置休息、食水和清洁三个基础区域。" : "养宠模块沿墙或固定家具边缘排布，中央过道保持留空。"}</p>{furniture.filter(item => item.id.startsWith("pet-")).length < (petKind === "dog" && selectedOption !== 2 ? 4 : 3) && <p role="status">当前空闲位置不足，部分模块暂未加入。可先移动现有家具，再重新生成养宠方案。</p>}<small>尺寸与位置为示意，可拖动微调后确认。</small></div> : <div className="metric-charts">
                 {comparisonMetrics.map((metric) => (
                   <section className="metric-chart" key={metric.label}>
                     <b>{metric.label}</b>
@@ -1157,7 +1218,7 @@ function AgentPanel({
               }
               {state === "preview" && (
                 <div className="chat-preview-actions">
-                  <button className="primary" onClick={onApply}>应用此方案</button>
+                  <button className="primary" disabled={scenario === "desk" && !deskFits} onClick={onApply}>应用此方案</button>
                   <button onClick={onBack}>返回决策</button>
                 </div>
               )}
@@ -1168,7 +1229,7 @@ function AgentPanel({
         {state === "applied" && (
           <>
             <div className="chat-message user compact"><div><p>应用方案：{selected[0]}</p></div><i>U</i></div>
-            <div className="chat-message ai"><div><b>方案已应用</b><p>已按“{selected[1]}”完成排布。中间的家具仍可拖拽微调，你也可以继续输入新需求。</p>{scenario === "office" && <button className="next-scenario" onClick={onStartPet}><small>下一个生活场景</small><b>下个月打算养宠物 <span>↗</span></b></button>}</div></div>
+            <div className="chat-message ai"><div><b>方案已应用</b><p>已按“{selected[1]}”完成排布。中间的家具仍可拖拽微调，你也可以继续输入新需求。</p>{scenario === "office" && <button className="next-scenario" onClick={onStartPet}><small>下一个生活场景</small><b>下个月打算养宠物 <span>↗</span></b></button>}{scenario !== "desk" && <button className="next-scenario" onClick={onStartDesk}><small>最后一个生活场景</small><b>想换一张加宽 50% 的书桌 <span>↗</span></b></button>}</div></div>
           </>
         )}
       </div>
@@ -1206,14 +1267,19 @@ function Workspace() {
   const [scenario, setScenario] = useState<Scenario>("office")
   const [petKind, setPetKind] = useState<PetKind>("cat")
   const [officeBase, setOfficeBase] = useState<FurnitureModule[]>([])
+  const [deskBase, setDeskBase] = useState<FurnitureModule[]>([])
   const [officeDecision, setOfficeDecision] = useState("")
   const [layoutEdits, setLayoutEdits] = useState<Record<string, Record<string, FurniturePlacement>>>({})
   const layout = state === "preview" || state === "applied" ? `option-${selectedOption}` : state === "decision" ? "decision" : "base"
   const layoutKey = `${scenario}-${scenario === "pet" ? petKind : ""}-${layout}`
-  const base = useMemo(() => scenario === "pet" ? petLayout(officeBase, petKind, selectedOption) : furnitureLayout(layout), [scenario, officeBase, petKind, selectedOption, layout])
+  const deskPlan = useMemo(() => largerDeskLayout(deskBase), [deskBase])
+  const base = useMemo(() => scenario === "desk" ? deskPlan.furniture : scenario === "pet" ? petLayout(officeBase, petKind, selectedOption) : furnitureLayout(layout), [scenario, deskPlan, officeBase, petKind, selectedOption, layout])
   const furniture = useMemo(() => base.map(item => ({ ...item, ...layoutEdits[layoutKey]?.[item.id] })), [base, layoutEdits, layoutKey])
   const explore = (request: string) => {
-    if (/宠物|养猫|养狗|养宠|猫咪|狗狗/.test(request)) {
+    if (/书桌|办公桌|桌子/.test(request) && /大|宽|50|５０|百分之五十|换|买/.test(request)) {
+      setDeskBase(scenario === "desk" ? deskBase : furniture)
+      setScenario("desk")
+    } else if (/宠物|养猫|养狗|养宠|猫咪|狗狗/.test(request)) {
       if (scenario === "office") setOfficeBase(furniture)
       setScenario("pet")
       if (/狗/.test(request)) setPetKind("dog")
@@ -1266,6 +1332,9 @@ function Workspace() {
           furniture={furniture}
           onPetKindChange={kind => { setPetKind(kind); setState("decision") }}
           onStartPet={() => explore("下个月打算养宠物") }
+          onStartDesk={() => explore("想买一张更大的书桌，在原书桌基础上加宽 50%") }
+          deskOriginal={deskBase.find(item => item.id === "desk")}
+          deskFits={deskPlan.fits}
           onSelect={(index) => {
             setSelectedOption(index)
             if (state === "decision") {
