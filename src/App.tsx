@@ -776,7 +776,7 @@ function AgentPanel({
       <header><b>AGENT WORKSPACE</b><strong>{state === "decision" ? "Need your decision" : state === "preview" ? "Previewing" : state === "applied" ? "Applied" : ""}</strong></header>
       <div className="conversation" ref={conversationRef}>
         <div className="chat-message ai">
-          <img className="agent-avatar" src="/assets/agent-avatar.png" alt="SpaceBranch Agent" />
+          
           <div><p>告诉我你的生活变化或空间需求。我会分析空间、尝试布局，并在需要你判断时暂停。</p></div>
         </div>
 
@@ -785,7 +785,7 @@ function AgentPanel({
         {state !== "idle" && (
           <>
             <div className="chat-message ai">
-              <img className="agent-avatar" src="/assets/agent-avatar.png" alt="SpaceBranch Agent" />
+              
               <div>
                 <b>已完成空间分析</b>
                 <p>我检查了墙面、窗户、门的开合和主要通道，并自主尝试了三种布局策略。</p>
@@ -793,7 +793,7 @@ function AgentPanel({
               </div>
             </div>
             <div className="chat-message ai">
-              <img className="agent-avatar" src="/assets/agent-avatar.png" alt="SpaceBranch Agent" />
+              
               <div>
                 <b>需要你的决策</b>
                 <p>点击任一方案会立即在中间平面图中预览，但不会直接应用。</p>
@@ -811,7 +811,7 @@ function AgentPanel({
 
         {(state === "preview" || state === "applied") && (
           <div className="chat-message ai">
-            <img className="agent-avatar" src="/assets/agent-avatar.png" alt="SpaceBranch Agent" />
+            
             <div className="chat-preview">
               <div className="preview-switcher-head">
                 <b>当前预览：{selected[0]}</b>
@@ -848,7 +848,7 @@ function AgentPanel({
         {state === "applied" && (
           <>
             <div className="chat-message user compact"><div><p>应用方案：{selected[0]}</p></div><i>U</i></div>
-            <div className="chat-message ai"><img className="agent-avatar" src="/assets/agent-avatar.png" alt="SpaceBranch Agent" /><div><b>方案已应用</b><p>已按“{selected[1]}”完成排布。中间的家具仍可拖拽微调，你也可以继续输入新需求。</p></div></div>
+            <div className="chat-message ai"><div><b>方案已应用</b><p>已按“{selected[1]}”完成排布。中间的家具仍可拖拽微调，你也可以继续输入新需求。</p></div></div>
           </>
         )}
       </div>
