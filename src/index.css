@@ -682,6 +682,14 @@ button { color: inherit; }
   width: 27px; height: 27px; display: grid; place-items: center; flex: none;
   border-radius: 8px; color: #fff; background: #2d7dfc; font-size: 12px; font-style: normal; font-weight: 700;
 }
+.chat-message > .agent-avatar {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  object-fit: none;
+  object-position: center;
+  border-radius: 8px;
+}
 .chat-message > div {
   min-width: 0; max-width: calc(100% - 36px); padding: 11px 12px;
   border: 1px solid #e7e8ea; border-radius: 4px 14px 14px 14px; background: #fff;
