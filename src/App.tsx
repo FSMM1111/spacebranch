@@ -723,13 +723,13 @@ function FloorPlan({
   return (
     <main className="floor-area">
       <div className="floor-toolbar">
-        <div><h1>{viewMode === "2d" ? "2D Floor Plan" : "3D Space View"}</h1><p>12 ㎡ · 卧室</p></div>
+        <div><h1>空间布局</h1><p>卧室 · 12 ㎡ · {viewMode === "2d" ? "平面视图" : "白模视图"}</p></div>
         <div className="tools">
           <div className="view-switch">
             <button className={viewMode === "2d" ? "active" : ""} onClick={() => onViewModeChange("2d")}>2D 图</button>
             <button className={viewMode === "3d" ? "active" : ""} onClick={() => onViewModeChange("3d")}>3D 图</button>
           </div>
-          <span>−　100%　＋</span>
+          <span className="viewport-label">{viewMode === "2d" ? "TOP / 2D" : "SOLID / 3D"}</span>
         </div>
       </div>
       <div className="floor-stage">
