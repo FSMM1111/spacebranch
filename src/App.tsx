@@ -625,9 +625,75 @@ function SpacePreviewEditor({ onBack, onConfirm }: { onBack: () => void; onConfi
   )
 }
 
-function ThreeDBox({ className, label, height }: { className: string; label: string; height: number }) {
+type FurniturePlacement = { x: number; y: number; width: number; depth: number }
+type FurnitureModule = FurniturePlacement & { id: string; label: string; height: number }
+
+function furnitureLayout(layout: string): FurnitureModule[] {
+  const modules: FurnitureModule[] = [
+    { id: "wardrobe", label: "衣柜", x: 0, y: 0, width: 22, depth: 38, height: 92 },
+    { id: "bed", label: "床", x: 64, y: 0, width: 36, depth: 70, height: 24 },
+    { id: "desk", label: "书桌", x: 0, y: 46, width: 15, depth: 30, height: 34 },
+    { id: "shelf", label: "书柜", x: 0, y: 76, width: 9, depth: 24, height: 70 },
+    { id: "night", label: "床头柜", x: 90, y: 70, width: 10, depth: 10, height: 28 },
+    { id: "basket", label: "置物筐", x: 0, y: 38, width: 12, depth: 8, height: 14 },
+    { id: "chair", label: "椅子", x: 15, y: 52, width: 13, depth: 17, height: 38 },
+  ]
+  const updates: Record<string, Partial<FurniturePlacement>> = layout === "decision" ? {
+    desk: { x: 37, y: 0, width: 25, depth: 16 }, chair: { x: 43, y: 16 },
+    shelf: { y: 38, depth: 30 }, basket: { y: 68 },
+  } : layout === "option-1" ? {
+    desk: { x: 28, y: 85, width: 25, depth: 15 }, chair: { x: 34, y: 68 },
+    shelf: { y: 38, depth: 30 }, basket: { y: 68 },
+  } : layout === "option-2" ? {
+    desk: { x: 22, y: 0, width: 15, depth: 15 }, chair: { x: 23, y: 15 },
+    shelf: { y: 38, depth: 30 }, basket: { y: 68 },
+  } : {}
+  return modules.map((item) => ({ ...item, ...updates[item.id] }))
+}
+
+function placementStyle(item: FurniturePlacement): React.CSSProperties {
+  return { left: `${item.x}%`, top: `${item.y}%`, right: "auto", bottom: "auto", width: `${item.width}%`, height: `${item.depth}%` }
+}
+
+function Furniture2D({ item, onMove }: { item: FurnitureModule; onMove: (id: string, placement: FurniturePlacement) => void }) {
+  const drag = useRef<{ x: number; y: number; startX: number; startY: number; roomWidth: number; roomDepth: number } | null>(null)
   return (
-    <div className={`object-3d ${className}`} style={{ "--box-height": `${height}px` } as React.CSSProperties}>
+    <button
+      className={`drag-item ${item.id === "chair" ? "chair" : `${item.id}-module`}`}
+      data-furniture-id={item.id}
+      style={placementStyle(item)}
+      onPointerDown={(event) => {
+        if (event.button !== 0) return
+        const room = event.currentTarget.parentElement!
+        drag.current = { x: item.x, y: item.y, startX: event.clientX, startY: event.clientY, roomWidth: room.clientWidth, roomDepth: room.clientHeight }
+        event.currentTarget.setPointerCapture(event.pointerId)
+      }}
+      onPointerMove={(event) => {
+        const start = drag.current
+        if (!start) return
+        onMove(item.id, { ...item,
+          x: Math.max(0, Math.min(100 - item.width, start.x + (event.clientX - start.startX) / start.roomWidth * 100)),
+          y: Math.max(0, Math.min(100 - item.depth, start.y + (event.clientY - start.startY) / start.roomDepth * 100)),
+        })
+      }}
+      onPointerUp={(event) => { drag.current = null; event.currentTarget.releasePointerCapture(event.pointerId) }}
+      onPointerCancel={() => { drag.current = null }}
+      onLostPointerCapture={() => { drag.current = null }}
+    >
+      <span className="furniture-label">{item.label}</span>
+      {item.id === "bed" && <span className="bed-linens"><i /><i /></span>}
+      {item.id === "desk" && <span className="desk-top"><i className="laptop" /><i className="plant" /></span>}
+      {item.id === "wardrobe" && <span className="wardrobe-doors"><i /><i /></span>}
+      {item.id === "shelf" && <span className="shelf-lines"><i /><i /><i /></span>}
+    </button>
+  )
+}
+
+function ThreeDBox({ item }: { item: FurnitureModule }) {
+  const { id, label, height } = item
+  const className = `${id}-3d`
+  return (
+    <div className={`object-3d ${className}`} data-furniture-id={id} style={{ ...placementStyle(item), "--box-height": `${height}px` } as React.CSSProperties}>
       <div className="box-face box-top"><span>{label}</span>{className.includes("bed-3d") && <><i /><i /></>}</div>
       <div className="box-face box-front" />
       <div className="box-face box-side" />
@@ -648,12 +714,12 @@ function FloorPlan({
 }) {
   const [orbit, setOrbit] = useState({ pitch: 57, yaw: -36 })
   const orbitDrag = useRef<{ x: number; y: number; pitch: number; yaw: number } | null>(null)
-  const layoutClass =
-    state === "preview"
-      ? `room-preview room-preview-${selectedOption}`
-      : state === "applied"
-        ? `room-applied room-applied-${selectedOption}`
-        : `room-${state}`
+  const layoutKey = state === "preview" || state === "applied" ? `option-${selectedOption}` : state === "decision" ? "decision" : "base"
+  const [manualLayouts, setManualLayouts] = useState<Record<string, Record<string, FurniturePlacement>>>({})
+  const furniture = furnitureLayout(layoutKey).map((item) => ({ ...item, ...manualLayouts[layoutKey]?.[item.id] }))
+  const moveFurniture = (id: string, placement: FurniturePlacement) => {
+    setManualLayouts((previous) => ({ ...previous, [layoutKey]: { ...previous[layoutKey], [id]: placement } }))
+  }
   return (
     <main className="floor-area">
       <div className="floor-toolbar">
@@ -691,12 +757,7 @@ function FloorPlan({
               <div className="wall-3d wall-3d-back"><span>窗户</span></div>
               <div className="wall-3d wall-3d-side" />
               <div className="floor-3d-grid" />
-              <ThreeDBox className="wardrobe-3d" label="衣柜" height={92} />
-              <ThreeDBox className="bed-3d" label="床" height={24} />
-              <ThreeDBox className="desk-3d" label="书桌" height={34} />
-              <ThreeDBox className="shelf-3d" label="书柜" height={70} />
-              <ThreeDBox className="night-3d" label="床头柜" height={28} />
-              <ThreeDBox className="chair-3d" label="椅子" height={38} />
+              {furniture.map((item) => <ThreeDBox key={item.id} item={item} />)}
             </div>
             <div className="view-3d-hint">按住并拖动旋转视角 · 拖动家具请切回 2D 图</div>
           </div>
@@ -705,18 +766,11 @@ function FloorPlan({
           <div className="window-title">窗户</div>
           <div className="measure measure-y">3 m</div>
           <div className="measure measure-x">4 m</div>
-          <div className={`room-plan ${layoutClass}`} aria-label="卧室二维平面图">
+          <div className="room-plan" aria-label="卧室二维平面图">
             <div className="floor-grid" />
             <div className="room-window"><i /><i /></div>
             <div className="room-door" />
-            <DragItem className="wardrobe-module" label="衣柜" layoutKey={`${state}-${selectedOption}`} />
-            <DragItem className="bed-module" label="床" layoutKey={`${state}-${selectedOption}`} />
-            <DragItem className="desk-module" label="书桌" layoutKey={`${state}-${selectedOption}`} />
-            <DragItem className="shelf-module" label="书柜" layoutKey={`${state}-${selectedOption}`} />
-            <DragItem className="night-module" label="床头柜" layoutKey={`${state}-${selectedOption}`} />
-            <DragItem className="basket-module" label="置物筐" layoutKey={`${state}-${selectedOption}`} />
-            <div className="chair"><i /><i /></div>
-            <div className="desk-plant" />
+            {furniture.map((item) => <Furniture2D key={`${layoutKey}-${item.id}`} item={item} onMove={moveFurniture} />)}
             {state === "decision" && <div className="corridor-zone" />}
           {state === "decision" && <div className="conflict"><i>!</i><span>Attempt 01<b>通道过窄</b></span></div>}
           </div>
