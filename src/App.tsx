@@ -419,6 +419,7 @@ function DragItem({
   itemStyle?: React.CSSProperties
 }) {
   const [pos, setPos] = useState({ x: 0, y: 0 })
+  const elementRef = useRef<HTMLButtonElement>(null)
   const drag = useRef<{ x: number; y: number; px: number; py: number } | null>(null)
 
   useEffect(() => {
@@ -428,7 +429,22 @@ function DragItem({
   useEffect(() => {
     const move = (event: PointerEvent) => {
       if (!drag.current) return
-      setPos({ x: drag.current.px + event.clientX - drag.current.x, y: drag.current.py + event.clientY - drag.current.y })
+      const element = elementRef.current
+      const room = element?.parentElement
+      if (!element || !room) return
+      const bounds = room.getBoundingClientRect()
+      const toPlacement = (node: Element): FurniturePlacement => {
+        const rect = node.getBoundingClientRect()
+        return { x: (rect.left - bounds.left) / bounds.width * 100, y: (rect.top - bounds.top) / bounds.height * 100, width: rect.width / bounds.width * 100, depth: rect.height / bounds.height * 100 }
+      }
+      const current = toPlacement(element)
+      const obstacles = Array.from(room.querySelectorAll(":scope > .drag-item")).filter(node => node !== element).map(toPlacement)
+      const targetX = drag.current.px + event.clientX - drag.current.x
+      const targetY = drag.current.py + event.clientY - drag.current.y
+      setPos(previous => {
+        const resolved = constrainMove(current, { ...current, x: current.x + (targetX - previous.x) / bounds.width * 100, y: current.y + (targetY - previous.y) / bounds.height * 100 }, obstacles)
+        return { x: previous.x + (resolved.x - current.x) / 100 * bounds.width, y: previous.y + (resolved.y - current.y) / 100 * bounds.height }
+      })
     }
     const up = () => { drag.current = null }
     window.addEventListener("pointermove", move)
@@ -441,12 +457,16 @@ function DragItem({
 
   return (
     <button
+      ref={elementRef}
       className={`drag-item ${className}`}
       style={{ ...itemStyle, transform: `translate(${pos.x}px, ${pos.y}px)` }}
       onPointerDown={(event) => {
+        if (event.button !== 0) return
         drag.current = { x: event.clientX, y: event.clientY, px: pos.x, py: pos.y }
         event.currentTarget.setPointerCapture(event.pointerId)
       }}
+      onPointerCancel={() => { drag.current = null }}
+      onLostPointerCapture={() => { drag.current = null }}
     >
       <span className="furniture-label">{label}</span>
       {className.includes("bed-module") && <span className="bed-linens"><i /><i /></span>}
@@ -475,7 +495,7 @@ function SpacePreviewEditor({ onBack, onConfirm }: { onBack: () => void; onConfi
   const [customName, setCustomName] = useState("自定义家具")
   const [customWidth, setCustomWidth] = useState("80")
   const [customDepth, setCustomDepth] = useState("40")
-  const [addedFurniture, setAddedFurniture] = useState<Array<{ id: number; type: string; label: string; widthCm?: number; depthCm?: number }>>([])
+  const [addedFurniture, setAddedFurniture] = useState<Array<{ id: number; type: string; label: string; widthCm?: number; depthCm?: number; placement: FurniturePlacement }>>([])
   const roomPlanRef = useRef<HTMLDivElement>(null)
   const openingDrag = useRef<{
     target: "window" | "door"
@@ -524,17 +544,32 @@ function SpacePreviewEditor({ onBack, onConfirm }: { onBack: () => void; onConfi
     const opening = target === "window" ? windowOpening : doorOpening
     openingDrag.current = { target, mode, startX: event.clientX, ...opening }
   }
-  const addFurniture = (type: string, label: string) => {
-    setAddedFurniture((items) => [...items, { id: Date.now(), type, label }])
-    setLibraryOpen(false)
-  }
-  const addCustomFurniture = () => {
-    const widthCm = Math.max(20, Math.min(300, Number(customWidth) || 80))
-    const depthCm = Math.max(20, Math.min(300, Number(customDepth) || 40))
-    setAddedFurniture((items) => [...items, { id: Date.now(), type: "custom", label: customName.trim() || "自定义家具", widthCm, depthCm }])
+  const [placementNotice, setPlacementNotice] = useState("")
+  const insertFurniture = (type: string, label: string, widthCm?: number, depthCm?: number) => {
+    const room = roomPlanRef.current
+    if (!room) return
+    const bounds = room.getBoundingClientRect()
+    const occupied = Array.from(room.querySelectorAll(":scope > .drag-item")).map(node => {
+      const rect = node.getBoundingClientRect()
+      return { x: (rect.left - bounds.left) / bounds.width * 100, y: (rect.top - bounds.top) / bounds.height * 100, width: rect.width / bounds.width * 100, depth: rect.height / bounds.height * 100 }
+    })
+    const defaults: Record<string, [number, number]> = { desk: [25, 16], shelf: [9, 24], chair: [13, 17], night: [10, 10], basket: [12, 8] }
+    const size = defaults[type] || [20, 14]
+    const width = widthCm ? widthCm / (Math.max(2, Number(roomLength) || 4) * 100) * 100 : size[0]
+    const depth = depthCm ? depthCm / (Math.max(2, Number(roomWidth) || 3) * 100) * 100 : size[1]
+    let placement: FurniturePlacement | undefined
+    for (let y = 0; y <= 100 - depth && !placement; y++) for (let x = 0; x <= 100 - width; x++) {
+      const candidate = { x, y, width, depth }
+      if (!occupied.some(other => overlaps(candidate, other))) { placement = candidate; break }
+    }
+    if (!placement) { setPlacementNotice("没有足够的空闲位置，请先移动家具或减小模块尺寸。"); return }
+    setAddedFurniture(items => [...items, { id: Date.now(), type, label, widthCm, depthCm, placement }])
+    setPlacementNotice("")
     setCustomOpen(false)
     setLibraryOpen(false)
   }
+  const addFurniture = (type: string, label: string) => insertFurniture(type, label)
+  const addCustomFurniture = () => insertFurniture("custom", customName.trim() || "自定义家具", Math.max(20, Math.min(300, Number(customWidth) || 80)), Math.max(20, Math.min(300, Number(customDepth) || 40)))
   const parsedLength = Math.max(2, Math.min(10, Number(roomLength) || 4))
   const parsedWidth = Math.max(2, Math.min(10, Number(roomWidth) || 3))
 
@@ -604,23 +639,19 @@ function SpacePreviewEditor({ onBack, onConfirm }: { onBack: () => void; onConfi
           <DragItem className="night-module" label="床头柜" layoutKey="space-preview" />
           <DragItem className="basket-module" label="置物筐" layoutKey="space-preview" />
           <DragItem className="cal-chair-module" label="椅子" layoutKey="space-preview" />
-          {addedFurniture.map((item, index) => (
+          {addedFurniture.map((item) => (
             <DragItem
               key={item.id}
               className={`added-furniture added-${item.type}`}
               label={item.label}
               layoutKey={`added-${item.id}`}
-              itemStyle={{
-                left: `${34 + (index % 4) * 9}%`,
-                top: `${38 + (index % 3) * 12}%`,
-                ...(item.widthCm ? { width: `${Math.min(70, (item.widthCm / (parsedLength * 100)) * 100)}%` } : {}),
-                ...(item.depthCm ? { height: `${Math.min(70, (item.depthCm / (parsedWidth * 100)) * 100)}%` } : {}),
-              }}
+              itemStyle={placementStyle(item.placement)}
             />
           ))}
         </div>
         </div>
       </div>
+      {placementNotice && <p role="status">{placementNotice}</p>}
       <button className="primary confirm-space" onClick={onConfirm}>确认空间并开始布局</button>
     </div>
   )
@@ -629,18 +660,77 @@ function SpacePreviewEditor({ onBack, onConfirm }: { onBack: () => void; onConfi
 type FurniturePlacement = { x: number; y: number; width: number; depth: number }
 type FurnitureModule = FurniturePlacement & { id: string; label: string; height: number }
 
+const COLLISION_EPSILON = 1e-7
+function overlaps(a: FurniturePlacement, b: FurniturePlacement): boolean {
+  return a.x < b.x + b.width - COLLISION_EPSILON && a.x + a.width > b.x + COLLISION_EPSILON && a.y < b.y + b.depth - COLLISION_EPSILON && a.y + a.depth > b.y + COLLISION_EPSILON
+}
+
+// Swept AABB: stop at the first contact even when the pointer jumps across a module.
+function constrainMove(current: FurniturePlacement, requested: FurniturePlacement, obstacles: FurniturePlacement[]): FurniturePlacement {
+  let position = { ...current }
+  let dx = Math.max(0, Math.min(100 - current.width, requested.x)) - current.x
+  let dy = Math.max(0, Math.min(100 - current.depth, requested.y)) - current.y
+  for (let pass = 0; pass < 3 && Math.hypot(dx, dy) > COLLISION_EPSILON; pass++) {
+    let time = 1, blockX = false, blockY = false
+    for (const other of obstacles) {
+      const interval = (start: number, delta: number, low: number, high: number): [number, number] => {
+        if (Math.abs(delta) < COLLISION_EPSILON) return start <= low + COLLISION_EPSILON || start >= high - COLLISION_EPSILON ? [Infinity, -Infinity] : [-Infinity, Infinity]
+        const a = (low - start) / delta, b = (high - start) / delta
+        return [Math.min(a, b), Math.max(a, b)]
+      }
+      const [enterX, exitX] = interval(position.x, dx, other.x - position.width, other.x + other.width)
+      const [enterY, exitY] = interval(position.y, dy, other.y - position.depth, other.y + other.depth)
+      const entry = Math.max(enterX, enterY), exit = Math.min(exitX, exitY)
+      if (entry >= -COLLISION_EPSILON && entry < time && exit > Math.max(0, entry) + COLLISION_EPSILON) {
+        time = Math.max(0, entry)
+        blockX = enterX >= enterY - COLLISION_EPSILON
+        blockY = enterY >= enterX - COLLISION_EPSILON
+      }
+    }
+    const travel = time < 1 ? Math.max(0, time - COLLISION_EPSILON) : 1
+    position = { ...position, x: position.x + dx * travel, y: position.y + dy * travel }
+    dx = blockX ? 0 : dx * (1 - travel)
+    dy = blockY ? 0 : dy * (1 - travel)
+  }
+  return obstacles.some(other => overlaps(position, other)) ? current : position
+}
+
+// All CSS position/size properties use the same easing. Test their entire interpolation,
+// and disable only transitions that would make volumes pass through one another.
+function canAnimateLayout(before: FurnitureModule[], after: FurnitureModule[]): boolean {
+  const previous = new Map(before.map(item => [item.id, item]))
+  for (let i = 0; i < after.length; i++) for (let j = i + 1; j < after.length; j++) {
+    const a1 = after[i], b1 = after[j], a0 = previous.get(a1.id) || a1, b0 = previous.get(b1.id) || b1
+    let low = 0, high = 1, possible = true
+    const gaps = [
+      [a0.x + a0.width - b0.x, a1.x + a1.width - b1.x],
+      [b0.x + b0.width - a0.x, b1.x + b1.width - a1.x],
+      [a0.y + a0.depth - b0.y, a1.y + a1.depth - b1.y],
+      [b0.y + b0.depth - a0.y, b1.y + b1.depth - a1.y],
+    ]
+    for (const [start, end] of gaps) {
+      const delta = end - start
+      if (Math.abs(delta) < COLLISION_EPSILON) { if (start <= COLLISION_EPSILON) possible = false }
+      else if (delta > 0) low = Math.max(low, (COLLISION_EPSILON - start) / delta)
+      else high = Math.min(high, (COLLISION_EPSILON - start) / delta)
+    }
+    if (possible && low < high && high > 0 && low < 1) return false
+  }
+  return true
+}
+
 function furnitureLayout(layout: string): FurnitureModule[] {
   const modules: FurnitureModule[] = [
     { id: "wardrobe", label: "衣柜", x: 0, y: 0, width: 22, depth: 38, height: 92 },
     { id: "bed", label: "床", x: 64, y: 0, width: 36, depth: 70, height: 24 },
     { id: "desk", label: "书桌", x: 0, y: 46, width: 15, depth: 30, height: 34 },
     { id: "shelf", label: "书柜", x: 0, y: 76, width: 9, depth: 24, height: 70 },
-    { id: "night", label: "床头柜", x: 90, y: 70, width: 10, depth: 10, height: 28 },
+    { id: "night", label: "床头柜", x: 53, y: 0, width: 10, depth: 10, height: 28 },
     { id: "basket", label: "置物筐", x: 0, y: 38, width: 12, depth: 8, height: 14 },
     { id: "chair", label: "椅子", x: 15, y: 52, width: 13, depth: 17, height: 38 },
   ]
   const updates: Record<string, Partial<FurniturePlacement>> = layout === "decision" ? {
-    desk: { x: 37, y: 0, width: 25, depth: 16 }, chair: { x: 43, y: 16 },
+    desk: { x: 27, y: 0, width: 25, depth: 16 }, chair: { x: 33, y: 16 },
     shelf: { y: 38, depth: 30 }, basket: { y: 68 },
   } : layout === "option-1" ? {
     desk: { x: 28, y: 85, width: 25, depth: 15 }, chair: { x: 34, y: 68 },
@@ -748,6 +838,14 @@ function Furniture2D({ item, onMove }: { item: FurnitureModule; onMove: (id: str
           y: Math.max(0, Math.min(100 - item.depth, start.y + (event.clientY - start.startY) / start.roomDepth * 100)),
         })
       }}
+      onKeyDown={(event) => {
+        const directions: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }
+        const delta = directions[event.key]
+        if (!delta) return
+        event.preventDefault()
+        const step = event.shiftKey ? 5 : 1
+        onMove(item.id, { ...item, x: item.x + delta[0] * step, y: item.y + delta[1] * step })
+      }}
       onPointerUp={(event) => { drag.current = null; event.currentTarget.releasePointerCapture(event.pointerId) }}
       onPointerCancel={() => { drag.current = null }}
       onLostPointerCapture={() => { drag.current = null }}
@@ -820,8 +918,11 @@ function FloorPlan({
 }) {
   const [orbit, setOrbit] = useState({ pitch: 57, yaw: -36 })
   const orbitDrag = useRef<{ x: number; y: number; pitch: number; yaw: number } | null>(null)
+  const previousFurniture = useRef(furniture)
+  const motionSafe = canAnimateLayout(previousFurniture.current, furniture)
+  useEffect(() => { previousFurniture.current = furniture }, [furniture])
   return (
-    <main className="floor-area">
+    <main className="floor-area" data-motion-safe={motionSafe}>
       <div className="floor-toolbar">
         <div><h1>空间布局</h1><p>卧室 · 12 ㎡ · {viewMode === "2d" ? "平面视图" : "白模视图"}</p></div>
         <div className="tools">
@@ -1104,7 +1205,14 @@ function Workspace() {
       <BrandHeader status={status} />
       <div className="app-columns">
         <MemoryPanel state={state} scenario={scenario} officeDecision={officeDecision} />
-        <FloorPlan state={state} selectedOption={selectedOption} viewMode={viewMode} onViewModeChange={setViewMode} scenario={scenario} furniture={furniture} onMove={(id, placement) => setLayoutEdits(previous => ({ ...previous, [layoutKey]: { ...previous[layoutKey], [id]: placement } }))} />
+        <FloorPlan state={state} selectedOption={selectedOption} viewMode={viewMode} onViewModeChange={setViewMode} scenario={scenario} furniture={furniture} onMove={(id, placement) => setLayoutEdits(previous => {
+          const current = base.map(item => ({ ...item, ...previous[layoutKey]?.[item.id] }))
+          const moving = current.find(item => item.id === id)
+          if (!moving) return previous
+          const resolved = constrainMove(moving, placement, current.filter(item => item.id !== id))
+          if (resolved.x === moving.x && resolved.y === moving.y) return previous
+          return { ...previous, [layoutKey]: { ...previous[layoutKey], [id]: resolved } }
+        })} />
         <div className="resize-handle" onPointerDown={(event) => { resize.current = { x: event.clientX, width: panelWidth } }} />
         <AgentPanel
           state={state}

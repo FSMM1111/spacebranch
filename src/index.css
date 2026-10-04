@@ -1089,3 +1089,8 @@ button:focus-visible { outline: 2px solid #555; outline-offset: 3px; }
 .pet-pad .pet-tray-inset::after { display: none; }
 .pet-storage-lid { position: absolute; inset: 10%; border: 1px solid #bbb; border-radius: 4px; background: #ededed; }
 .pet-storage-lid::after { content: ""; position: absolute; top: 44%; left: 34%; width: 32%; height: 9%; border-radius: 3px; background: #bcbcbc; }
+
+/* Bedside placement also applies in the space-confirmation editor. */
+.night-module { left: 53%; right: auto; top: 0; }
+.floor-area[data-motion-safe="false"] .drag-item,
+.floor-area[data-motion-safe="false"] .object-3d { transition: none; }
