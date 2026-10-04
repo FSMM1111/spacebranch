@@ -842,7 +842,6 @@ const options = [
 const comparisonMetrics = [
   { label: "工作舒适度", values: [96, 78, 65], display: ["96", "78", "65"] },
   { label: "空间开阔度", values: [68, 94, 82], display: ["68", "94", "82"] },
-  { label: "成本友好度", values: [62, 76, 96], display: ["62", "76", "96"] },
   { label: "主通道宽度", values: [82, 100, 91], display: ["82 cm", "90 cm", "86 cm"] },
 ]
 
