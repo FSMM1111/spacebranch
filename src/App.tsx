@@ -695,135 +695,6 @@ function constrainMove(current: FurniturePlacement, requested: FurniturePlacemen
   return obstacles.some(other => overlaps(position, other)) ? current : position
 }
 
-// All CSS position/size properties use the same easing. Test their entire interpolation,
-// and disable only transitions that would make volumes pass through one another.
-function canAnimateLayout(before: FurnitureModule[], after: FurnitureModule[]): boolean {
-  const previous = new Map(before.map(item => [item.id, item]))
-  for (let i = 0; i < after.length; i++) for (let j = i + 1; j < after.length; j++) {
-    const a1 = after[i], b1 = after[j], a0 = previous.get(a1.id) || a1, b0 = previous.get(b1.id) || b1
-    let low = 0, high = 1, possible = true
-    const gaps = [
-      [a0.x + a0.width - b0.x, a1.x + a1.width - b1.x],
-      [b0.x + b0.width - a0.x, b1.x + b1.width - a1.x],
-      [a0.y + a0.depth - b0.y, a1.y + a1.depth - b1.y],
-      [b0.y + b0.depth - a0.y, b1.y + b1.depth - a1.y],
-    ]
-    for (const [start, end] of gaps) {
-      const delta = end - start
-      if (Math.abs(delta) < COLLISION_EPSILON) { if (start <= COLLISION_EPSILON) possible = false }
-      else if (delta > 0) low = Math.max(low, (COLLISION_EPSILON - start) / delta)
-      else high = Math.min(high, (COLLISION_EPSILON - start) / delta)
-    }
-    if (possible && low < high && high > 0 && low < 1) return false
-  }
-  return true
-}
-
-type LayoutMotionStep = { furniture: FurnitureModule[]; duration: number }
-
-function modulePath(start: FurnitureModule, goal: FurnitureModule, obstacles: FurnitureModule[]): FurnitureModule[] | null {
-  if (obstacles.some(item => overlaps(goal, item))) return null
-  const coordinates = (axis: "x" | "y", size: number) => Array.from(new Set([
-    0, 100 - size, start[axis], goal[axis],
-    ...obstacles.flatMap(item => [item[axis] - size, item[axis] + (axis === "x" ? item.width : item.depth)]),
-  ].filter(value => value >= 0 && value <= 100 - size))).sort((a, b) => a - b)
-  const xs = coordinates("x", start.width), ys = coordinates("y", start.depth)
-  const key = (x: number, y: number) => y * xs.length + x
-  const startKey = key(xs.indexOf(start.x), ys.indexOf(start.y)), goalKey = key(xs.indexOf(goal.x), ys.indexOf(goal.y))
-  const costs = new Map<number, number>([[startKey, 0]]), previous = new Map<number, number>(), open = new Set([startKey])
-  const placement = (node: number) => ({ ...start, x: xs[node % xs.length], y: ys[Math.floor(node / xs.length)] })
-  while (open.size) {
-    let node = -1, best = Infinity
-    for (const candidate of open) {
-      const point = placement(candidate), score = costs.get(candidate)! + Math.abs(point.x - goal.x) + Math.abs(point.y - goal.y)
-      if (score < best) { node = candidate; best = score }
-    }
-    if (node === goalKey) {
-      const path = [placement(node)]
-      while (previous.has(node)) { node = previous.get(node)!; path.unshift(placement(node)) }
-      return path.filter((point, i) => i === 0 || i === path.length - 1 || !((path[i - 1].x === point.x && point.x === path[i + 1].x) || (path[i - 1].y === point.y && point.y === path[i + 1].y)))
-    }
-    open.delete(node)
-    const x = node % xs.length, y = Math.floor(node / xs.length), from = placement(node)
-    for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]) {
-      if (nx < 0 || nx >= xs.length || ny < 0 || ny >= ys.length) continue
-      const next = key(nx, ny), to = placement(next)
-      const swept = { x: Math.min(from.x, to.x), y: Math.min(from.y, to.y), width: start.width + Math.abs(from.x - to.x), depth: start.depth + Math.abs(from.y - to.y) }
-      if (obstacles.some(item => overlaps(swept, item))) continue
-      const cost = costs.get(node)! + Math.abs(from.x - to.x) + Math.abs(from.y - to.y)
-      if (cost >= (costs.get(next) ?? Infinity)) continue
-      costs.set(next, cost); previous.set(next, node); open.add(next)
-    }
-  }
-  return null
-}
-
-function planLayoutMotion(before: FurnitureModule[], after: FurnitureModule[]): LayoutMotionStep[] {
-  if (canAnimateLayout(before, after)) return [{ furniture: after, duration: 800 }]
-  let working = before.filter(item => after.some(target => target.id === item.id))
-  const steps: LayoutMotionStep[] = []
-  const different = (a: FurnitureModule, b: FurnitureModule) => a.x !== b.x || a.y !== b.y || a.width !== b.width || a.depth !== b.depth
-  const pending = new Map(after.filter(item => working.some(previous => previous.id === item.id && different(previous, item))).map(item => [item.id, item]))
-  const push = (item: FurnitureModule, duration: number) => {
-    working = working.map(previous => previous.id === item.id ? item : previous)
-    steps.push({ furniture: working, duration })
-  }
-  const move = (current: FurnitureModule, target: FurnitureModule): boolean => {
-    const obstacles = working.filter(item => item.id !== current.id)
-    if (obstacles.some(item => overlaps(target, item))) return false
-    const small = { ...current, width: Math.min(current.width, target.width), depth: Math.min(current.depth, target.depth) }
-    const path = modulePath(small, { ...small, x: target.x, y: target.y }, obstacles)
-    if (!path) return false
-    if (different(current, small)) push(small, 120)
-    for (let i = 1; i < path.length; i++) {
-      const distance = Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y)
-      push(path[i], Math.max(110, Math.min(360, distance * 7)))
-    }
-    if (different(path[path.length - 1], target)) push(target, 140)
-    return true
-  }
-  for (let attempt = 0; pending.size && attempt < after.length * 4; attempt++) {
-    let advanced = false
-    for (const [id, target] of pending) {
-      if (move(working.find(item => item.id === id)!, target)) { pending.delete(id); advanced = true }
-    }
-    if (advanced) continue
-    // Resolve mutual blocking by temporarily parking a moving module in free space.
-    let parked = false
-    const movableIds = after.filter(target => before.some(original => original.id === target.id && different(original, target))).map(item => item.id)
-    const parkingOrder = [...movableIds.filter(id => !pending.has(id)), ...pending.keys()]
-    for (const id of parkingOrder) {
-      const item = working.find(current => current.id === id)!
-      const reserved = [...working.filter(other => other.id !== id), ...after.filter(other => other.id !== id)]
-      const candidates: FurnitureModule[] = []
-      for (let y = 0; y <= 100 - item.depth; y += 2) for (let x = 0; x <= 100 - item.width; x += 2) {
-        const candidate = { ...item, x, y }
-        if (Math.hypot(x - item.x, y - item.y) >= 2 && !reserved.some(other => overlaps(candidate, other))) candidates.push(candidate)
-      }
-      candidates.sort((a, b) => (Math.hypot(a.x - 34, a.y - 40) + .1 * Math.hypot(a.x - item.x, a.y - item.y)) - (Math.hypot(b.x - 34, b.y - 40) + .1 * Math.hypot(b.x - item.x, b.y - item.y)))
-      for (const candidate of candidates) {
-        const parkedLayout = working.map(other => other.id === id ? candidate : other)
-        const unblocks = Array.from(pending.values()).some(target => {
-          if (target.id === id) return false
-          const current = parkedLayout.find(other => other.id === target.id)!
-          const obstacles = parkedLayout.filter(other => other.id !== target.id)
-          if (obstacles.some(other => overlaps(target, other))) return false
-          const small = { ...current, width: Math.min(current.width, target.width), depth: Math.min(current.depth, target.depth) }
-          return modulePath(small, { ...small, x: target.x, y: target.y }, obstacles) !== null
-        })
-        if (unblocks && move(item, candidate)) { pending.set(id, after.find(target => target.id === id)!); parked = true; break }
-      }
-      if (parked) break
-    }
-    if (!parked) break
-  }
-  // A fully packed manually edited room may have no traversable route.
-  // Its validated target remains usable; ordinary proposals take collision-free routes.
-  if (pending.size) return [{ furniture: after, duration: 0 }]
-  steps.push({ furniture: after, duration: 0 })
-  return steps
-}
-
 function furnitureLayout(layout: string): FurnitureModule[] {
   const modules: FurnitureModule[] = [
     { id: "wardrobe", label: "衣柜", x: 0, y: 0, width: 22, depth: 38, height: 92 },
@@ -1038,21 +909,18 @@ function FloorPlan({
       return
     }
     lastMotionKey.current = motionKey
-    const steps = planLayoutMotion(displayedRef.current, furniture)
-    let frame = 0, stepIndex = 0, started: number | null = null, origin = displayedRef.current
+    const origin = new Map(displayedRef.current.map(item => [item.id, item]))
+    let frame = 0, started: number | null = null
     setLayoutMoving(true)
     const tick = (now: number) => {
-      const step = steps[stepIndex]
-      if (!step) { update(furniture); setLayoutMoving(false); return }
       if (started === null) started = now
-      const progress = step.duration ? Math.min(1, (now - started) / step.duration) : 1
+      const progress = Math.min(1, (now - started) / 800)
       const eased = progress * progress * (3 - 2 * progress)
-      const previous = new Map(origin.map(item => [item.id, item]))
-      update(step.furniture.map(item => {
-        const from = previous.get(item.id) || item
+      update(furniture.map(item => {
+        const from = origin.get(item.id) || item
         return { ...item, x: from.x + (item.x - from.x) * eased, y: from.y + (item.y - from.y) * eased, width: from.width + (item.width - from.width) * eased, depth: from.depth + (item.depth - from.depth) * eased }
       }))
-      if (progress === 1) { origin = step.furniture; started = null; stepIndex++ }
+      if (progress === 1) { update(furniture); setLayoutMoving(false); return }
       frame = requestAnimationFrame(tick)
     }
     frame = requestAnimationFrame(tick)
